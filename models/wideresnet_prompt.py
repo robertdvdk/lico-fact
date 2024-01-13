@@ -154,6 +154,7 @@ class WideResNetPrompt(nn.Module):
         out = self.block2(out)  
         out = self.block3(out)
         out = self.relu(self.bn1(out))
+        #image feature maps
         feature_maps = out.view(out.shape[0], out.shape[1], -1)
 
         out = F.adaptive_avg_pool2d(out, 1)
@@ -162,6 +163,7 @@ class WideResNetPrompt(nn.Module):
         emb = out
 
         emb_temp = self.emb_temp
+        #section 3.2 - adjacency matrix of image features
         emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp, norm = True)
         
 
@@ -183,7 +185,9 @@ class WideResNetPrompt(nn.Module):
             feature_maps = F.normalize(feature_maps, dim = 2)
             text_features_w = F.normalize(text_features_w, dim = 2)
             with torch.no_grad():
+                # P could be the Transport plan and C the cost matrix from Wasserstein distance
                 P, C = w_distance(feature_maps, text_features_w)
+            # Wasserstein loss (or OT loss)
             w_loss = torch.sum(P * C, dim=(-2, -1)).mean()
 
             label_distribution, _ = sim_matrix_pre(
