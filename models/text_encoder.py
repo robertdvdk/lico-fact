@@ -225,6 +225,7 @@ class CustomCLIP(nn.Module):
         self.text_encoder = TextEncoder(clip_model)
         self.logit_scale = clip_model.logit_scale
         self.dtype = clip_model.dtype
+        self.transform = clip._transform(self.input_resolution.item())
 
     def forward(self, image, label=None):
         tokenized_prompts = self.tokenized_prompts
