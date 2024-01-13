@@ -40,13 +40,11 @@ train_loader, val_loader, test_loader = ImageNetDataLoader(dataset_path='path/to
 for epoch in range(args.num_epochs):
     for images, labels in train_loader:
         # Preprocess the images and labels
-        images = preprocess(images).to(args.device)
+        images = clip_model.transform(images).to(args.device)
         labels = labels.to(args.device)
 
         # Forward pass
-        features = model.encode_image(images)
-        logits = model.image_encoder(features)
-        loss = criterion(logits, labels)
+        loss = clip_model(images, labels)
 
         # Backward pass and optimization
         optimizer.zero_grad()
@@ -57,4 +55,4 @@ for epoch in range(args.num_epochs):
         print(f"Epoch [{epoch+1}/{args.num_epochs}], Loss: {loss.item()}")
 
 # Save the fine-tuned model
-torch.save(model.state_dict(), args.save_path)
+torch.save(clip_model.state_dict(), args.save_path)
