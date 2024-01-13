@@ -1,6 +1,5 @@
 import argparse
 import torch
-import clip
 from datasets import ImageNetDataLoader
 from models.text_encoder import CustomCLIP, TextEncoder, load_clip_to_cpu, get_ImageNet_ClassNames
 

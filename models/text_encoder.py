@@ -8,8 +8,8 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torch.cuda.amp import GradScaler, autocast
 
-from clip import clip
-from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
+from .clip import clip
+from .clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 
 import json
 
@@ -219,13 +219,13 @@ class PromptLearner(nn.Module):
 class CustomCLIP(nn.Module):
     def __init__(self, cfg, classnames, clip_model):
         super().__init__()
-        self.prompt_learner = PromptLearner(cfg, classnames, clip_model)
+        self.prompt_learner = PromptLearner(classnames, clip_model)
         self.tokenized_prompts = self.prompt_learner.tokenized_prompts
         self.image_encoder = clip_model.visual
         self.text_encoder = TextEncoder(clip_model)
         self.logit_scale = clip_model.logit_scale
         self.dtype = clip_model.dtype
-        self.transform = clip._transform(self.input_resolution.item())
+        self.transform = clip._transform(self.image_encoder.input_resolution)
 
     def forward(self, image, label=None):
         tokenized_prompts = self.tokenized_prompts
