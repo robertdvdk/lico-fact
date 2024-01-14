@@ -8,7 +8,7 @@ from models.wideresnet_prompt import *
 from models.modules.sinkhorn_distance import SinkhornDistance
 from utils.misc import *
 import argparse
-
+import os
 
 parser = argparse.ArgumentParser(description='Train LICO')
 
@@ -26,9 +26,12 @@ parser.add_argument('--num_epochs', type=int, default=10, help='Number of epochs
 parser.add_argument('--alpha', type=float, default=10, help='Weight of manifold loss')
 parser.add_argument('--beta', type=float, default=1, help='Weight of OT loss')
 parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
+parser.add_argument('--val_prop', type=float, default=0.05, help='Proportion of train data to use for validation')
 parser.add_argument('--sinkhorn_eps', type=float, default=0.1, help='Default eps to use for sinkhorn algorithm')
 parser.add_argument('--sinkhorn_max_iters', type=int, default=1000, help='Max iterations for sinkhorn algorithm')
 parser.add_argument('--train_dataset', type=str, default='CIFAR10', help='Which dataset to train on')
+parser.add_argument('--save_path', type=str, default='./trained_models/', help='Path to save trained models')
+parser.add_argument('--save_model_name', type=str, default='default_model_name.pt', help='Model name to save')
 
 args = parser.parse_args()
 
@@ -48,10 +51,18 @@ if args.train_dataset == 'CIFAR10':
 
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                             download=True, transform=transform)
+    
+    num_train = len(trainset)
+    num_val = int(num_train * args.val_prop) 
+    num_train = num_train - num_val
+
+    trainset, valset = torch.utils.data.random_split(trainset, [num_train, num_val])
 
     testset = torchvision.datasets.CIFAR10(root='./data', train=False,
                                         download=True, transform=transform)
     
+    
+            
     classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
     
@@ -72,6 +83,9 @@ else:
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
                                           shuffle=True, num_workers=2)
 
+valloader= torch.utils.data.DataLoader(valset, batch_size=args.batch_size,
+                                          shuffle=True, num_workers=2)
+
 testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
                                          shuffle=False, num_workers=2)
 
@@ -88,9 +102,13 @@ optimizer = SGD(wrn.parameters(), lr=args.lr, momentum=args.momentum)
 alpha = args.alpha
 beta = args.beta
 
-total_loss = 0
+best_model = None
+best_val_loss = float("inf")
 
 for epoch in range(num_epochs):
+    
+    num_batches = 0
+    running_loss = 0
 
     for batch in trainloader:
 
@@ -120,13 +138,31 @@ for epoch in range(num_epochs):
 
         optimizer.step()
 
-        total_loss += loss.item()
+        running_loss += loss.item()
+        num_batches += 1
 
-    print(f"Epoch {epoch+1} loss: {round(total_loss, 3)}")
+    avg_loss = running_loss/num_batches
 
-    test_acc = test_accuracy(wrn, testloader, device)
-    
-    print(f"Epoch {epoch+1} test accuracy: {round(test_acc, 3)}")
+    print(f"Epoch {epoch+1} average loss: {round(avg_loss, 3)}")
 
-    total_loss = 0
+    test_acc = get_accuracy(wrn, valloader, device)
+
+    print(f"Epoch {epoch+1} validation accuracy: {round(test_acc, 3)}")
+
+    # calculate val loss to do model selection
+
+    val_loss = get_loss(wrn, valloader, args, device)
+
+    if val_loss < best_val_loss:
+        best_model = wrn.state_dict()
+        best_val_loss = val_loss
+
+
+full_model_save_path = args.save_path + args.save_model_name
+
+if not os.path.exists(os.path.dirname(full_model_save_path)):
+    os.makedirs(os.path.dirname(full_model_save_path))
+
+torch.save(best_model, full_model_save_path)
+
         

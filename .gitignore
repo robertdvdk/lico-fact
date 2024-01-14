@@ -1,2 +1,3 @@
 data/
-experiment_cache
+experiment_cache/
+trained_models/
