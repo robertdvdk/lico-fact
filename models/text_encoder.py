@@ -21,7 +21,7 @@ _tokenizer = _Tokenizer()
 def load_clip_to_cpu():
     backbone_name = "ViT-B/32"
     url = clip._MODELS[backbone_name]
-    model_path = clip._download(url, root = os.path.expanduser("/home/ymlei/.cache/clip"))
+    model_path = clip._download(url, root = os.path.expanduser("~/.cache/clip"))
 
     try:
         # loading JIT archive
