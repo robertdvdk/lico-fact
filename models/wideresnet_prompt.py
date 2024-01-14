@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from utils.label_mapping import pdists
-from utils.label_mapping import sim_matrix, sim_matrix_pre
-from models.text_encoder import load_clip_to_cpu, TextEncoder, PromptLearner, PromptLearnerBERT
+from utils.label_mapping import sim_matrix_pre
+from models.text_encoder import load_clip_to_cpu, TextEncoder, PromptLearner
 from models.clip import clip
 
 from models.text_encoder import get_Cifar100_ClassNames
@@ -144,7 +144,7 @@ class WideResNetPrompt(nn.Module):
         # self.up = nn.Upsample(scale_factor=2, mode='bilinear')
         self.fc_768to512 = nn.Linear(768, 512)
 
-    def forward(self, x, args, 
+    def forward(self, x, language=True, 
         targets = None, 
         w_distance = None,
         mode = 'train'):
@@ -154,7 +154,6 @@ class WideResNetPrompt(nn.Module):
         out = self.block2(out)  
         out = self.block3(out)
         out = self.relu(self.bn1(out))
-        #image feature maps
         feature_maps = out.view(out.shape[0], out.shape[1], -1)
 
         out = F.adaptive_avg_pool2d(out, 1)
@@ -163,7 +162,6 @@ class WideResNetPrompt(nn.Module):
         emb = out
 
         emb_temp = self.emb_temp
-        #section 3.2 - adjacency matrix of image features
         emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp, norm = True)
         
 
@@ -173,7 +171,7 @@ class WideResNetPrompt(nn.Module):
 
 
         
-        if args.language and mode == 'train':
+        if language and mode == 'train':
             out = self.fc(out)
 
             # prompt learning
@@ -185,14 +183,13 @@ class WideResNetPrompt(nn.Module):
             feature_maps = F.normalize(feature_maps, dim = 2)
             text_features_w = F.normalize(text_features_w, dim = 2)
             with torch.no_grad():
-                # P could be the Transport plan and C the cost matrix from Wasserstein distance
                 P, C = w_distance(feature_maps, text_features_w)
-            # Wasserstein loss (or OT loss)
             w_loss = torch.sum(P * C, dim=(-2, -1)).mean()
 
             label_distribution, _ = sim_matrix_pre(
                 targets, text_features, self.emb_temp, token_fc = None, noise = False)
             return out, emb_matrix, emb, w_loss, label_distribution
+        
         if mode == 'test':
             out = self.fc(out)
             label_distribution, _ = sim_matrix_pre(
@@ -225,7 +222,7 @@ class build_WideResNet:
         self.is_remix = is_remix
 
     def build(self, num_classes):
-        return WideResNet(
+        return WideResNetPrompt(
             first_stride=self.first_stride,
             depth=self.depth,
             num_classes=num_classes,

@@ -1,0 +1,35 @@
+============================================================================================== 
+Warning! Mixing Conda and module environments may lead to corruption of the
+user environment. 
+We do not recommend users mixing those two environments unless absolutely
+necessary. Note that 
+SURF does not provide any support for Conda environment.
+For more information, please refer to our software policy page:
+https://servicedesk.surf.nl/wiki/display/WIKI/Software+policy+Snellius+and+Lisa#SoftwarepolicySnelliusandLisa-UseofAnacondaandMinicondaenvironmentsonSnellius 
+
+Remember that many packages have already been installed on the system and can
+be loaded using 
+the 'module load <package__name>' command. If you are uncertain if a package is
+already available 
+on the system, please use 'module avail' or 'module spider' to search for it.
+============================================================================================== 
+Initializing class-specific contexts
+Initial context: "X X X X X X X X X X X X"
+Number of context words (tokens): 12
+tokenized prompts: torch.Size([10, 77, 512]) ctx:  torch.Size([10, 12, 512])
+Files already downloaded and verified
+Files already downloaded and verified
+/home/scur1199/.conda/envs/dl2023/lib/python3.11/site-packages/torch/nn/modules/conv.py:456: UserWarning: Applied workaround for CuDNN issue, install nvrtc.so (Triggered internally at /opt/conda/conda-bld/pytorch_1695392026823/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:80.)
+  return F.conv2d(input, weight, bias, self.stride,
+/gpfs/home4/scur1199/lico-fact/utils/label_mapping.py:9: UserWarning: The torch.cuda.*DtypeTensor constructors are no longer recommended. It's best to use methods such as torch.tensor(data, dtype=*, device='cuda') to create tensors. (Triggered internally at /opt/conda/conda-bld/pytorch_1695392026823/work/torch/csrc/tensor/python_tensor.cpp:83.)
+  batch_text_tensors = torch.cuda.FloatTensor(labels.size(0), text_tensors.size(1))
+Epoch 1 loss: 1406.396
+Epoch 1 test accuracy: 21.0
+Epoch 2 loss: 1232.48
+Epoch 2 test accuracy: 44.7
+Epoch 3 loss: 1088.694
+Epoch 3 test accuracy: 52.58
+Epoch 4 loss: 974.061
+Epoch 4 test accuracy: 57.6
+Epoch 5 loss: 879.804
+Epoch 5 test accuracy: 58.05
