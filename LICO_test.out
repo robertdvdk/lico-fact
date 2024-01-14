@@ -23,13 +23,8 @@ Files already downloaded and verified
   return F.conv2d(input, weight, bias, self.stride,
 /gpfs/home4/scur1199/lico-fact/utils/label_mapping.py:9: UserWarning: The torch.cuda.*DtypeTensor constructors are no longer recommended. It's best to use methods such as torch.tensor(data, dtype=*, device='cuda') to create tensors. (Triggered internally at /opt/conda/conda-bld/pytorch_1695392026823/work/torch/csrc/tensor/python_tensor.cpp:83.)
   batch_text_tensors = torch.cuda.FloatTensor(labels.size(0), text_tensors.size(1))
-Epoch 1 loss: 1406.396
-Epoch 1 test accuracy: 21.0
-Epoch 2 loss: 1232.48
-Epoch 2 test accuracy: 44.7
-Epoch 3 loss: 1088.694
-Epoch 3 test accuracy: 52.58
-Epoch 4 loss: 974.061
-Epoch 4 test accuracy: 57.6
-Epoch 5 loss: 879.804
-Epoch 5 test accuracy: 58.05
+Epoch 1 loss: 2833.779
+Epoch 1 test accuracy: 18.81
+Epoch 2 loss: 2750.631
+Epoch 2 test accuracy: 47.14
+Epoch 3 loss: 2592.525
