@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from models.modules.sinkhorn_distance import SinkhornDistance
+from torch.optim.lr_scheduler import _LRScheduler
+import math
 
 def calculate_manifold_loss(A, B):
 
@@ -72,3 +74,13 @@ def get_loss(model, dataloader, args, device):
     avg_loss = running_loss/num_batches
     return avg_loss
 
+class CosineAnnealingStepLR(_LRScheduler):
+    def __init__(self, optimizer, T_max, eta_min=0, last_epoch=-1):
+        self.T_max = T_max
+        self.eta_min = eta_min
+        super(CosineAnnealingStepLR, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        return [self.eta_min + (base_lr - self.eta_min) * 
+                math.cos(7 * math.pi * self._step_count / (16 * self.T_max)) 
+                for base_lr in self.base_lrs]
