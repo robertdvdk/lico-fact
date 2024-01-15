@@ -6,10 +6,11 @@ import torchvision
 import torchvision.transforms as transforms
 from models.wideresnet_prompt import *
 from models.modules.sinkhorn_distance import SinkhornDistance
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 from utils.misc import *
 import argparse
 import os
+import numpy as np
 
 parser = argparse.ArgumentParser(description='Train LICO')
 
@@ -124,7 +125,8 @@ w_distance = SinkhornDistance(args.sinkhorn_eps, args.sinkhorn_max_iters)
 
 CELoss = nn.CrossEntropyLoss()
 optimizer = SGD(wrn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-scheduler = CosineAnnealingStepLR(optimizer, T_max=num_steps)
+lambda1 = lambda t: args.lr*np.cos(7/16*np.pi*t/(num_epochs*num_steps))
+scheduler = LambdaLR(optimizer, lambda1)
 
 alpha = args.alpha
 beta = args.beta
