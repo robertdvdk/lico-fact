@@ -4,7 +4,10 @@ import numpy as np
 
 
 def sim_matrix_pre(labels, text_tensors, temp, token_fc, noise = False):
-
+    """ 
+    This function calculates intra-sample similarity between samples in the batch.
+    Section 3.2 - adjacency matrix text features 
+    """
     labels = labels.type(torch.cuda.FloatTensor)
     batch_text_tensors = torch.cuda.FloatTensor(labels.size(0), text_tensors.size(1))
     for i in range(labels.size(0)):

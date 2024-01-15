@@ -2,6 +2,7 @@ import argparse
 import torch
 from datasets import ImageNetDataLoader
 from models.text_encoder import CustomCLIP, TextEncoder, load_clip_to_cpu, get_ImageNet_ClassNames
+from models.wideresnet_prompt import build_WideResNet
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Train CLIP model')
@@ -18,20 +19,24 @@ args = parser.parse_args()
 # Classnames
 classnames = get_ImageNet_ClassNames()
 
+wrn_builder = build_WideResNet(1, 10, 2, 0.01, 0.1, 0.5)
+model = wrn_builder.build(10)
+print(model)
+
 # Load the pre-trained CLIP model
-clip_model = load_clip_to_cpu()
-clip_model = CustomCLIP(args, classnames, clip_model)
+# clip_model = load_clip_to_cpu()
+# clip_model = CustomCLIP(args, classnames, clip_model)
 
 # Freeze the text encoder
-for param in clip_model.text_encoder.parameters():
-    param.requires_grad = False
+# for param in clip_model.text_encoder.parameters():
+#    param.requires_grad = False
 
 # Move the model to the specified device
-clip_model = clip_model.to(args.device)
+# clip_model = clip_model.to(args.device)
 
 # Define your loss function and optimizer
 criterion = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(clip_model.parameters(), lr=args.lr)
+optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 train_loader, val_loader, test_loader = ImageNetDataLoader(dataset_path='path/to/imagenet').load_data()
 
@@ -39,11 +44,11 @@ train_loader, val_loader, test_loader = ImageNetDataLoader(dataset_path='path/to
 for epoch in range(args.num_epochs):
     for images, labels in train_loader:
         # Preprocess the images and labels
-        images = clip_model.transform(images).to(args.device)
+        images = model.transform(images).to(args.device)
         labels = labels.to(args.device)
 
         # Forward pass
-        loss = clip_model(images, labels)
+        loss = model(images, labels)
 
         # Backward pass and optimization
         optimizer.zero_grad()

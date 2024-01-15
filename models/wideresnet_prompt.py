@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from utils.label_mapping import pdists
-from utils.label_mapping import sim_matrix, sim_matrix_pre
-from models.text_encoder import load_clip_to_cpu, TextEncoder, PromptLearner, PromptLearnerBERT
+from utils.label_mapping import sim_matrix_pre
+from models.text_encoder import load_clip_to_cpu, TextEncoder, PromptLearner
 from models.clip import clip
 
 from models.text_encoder import get_Cifar100_ClassNames
@@ -166,13 +166,11 @@ class WideResNetPrompt(nn.Module):
         #section 3.2 - adjacency matrix of image features
         emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp, norm = True)
         
-
         text_features = []
         prompts = self.prompt_learner() # [100, 77, 512]
         text_features = self.text_encoder(prompts, self.tokenized_prompts) # [100, 512]
 
 
-        
         if args.language and mode == 'train':
             out = self.fc(out)
 
@@ -225,7 +223,7 @@ class build_WideResNet:
         self.is_remix = is_remix
 
     def build(self, num_classes):
-        return WideResNet(
+        return WideResNetPrompt(
             first_stride=self.first_stride,
             depth=self.depth,
             num_classes=num_classes,
