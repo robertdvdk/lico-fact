@@ -1,0 +1,20 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=9
+#SBATCH --gpus=1
+#SBATCH --job-name=baseline_test
+#SBATCH --ntasks=1
+#SBATCH --time=02:30:00
+#SBATCH --mem=32000M
+#SBATCH --output=baseline_test.out
+
+module purge
+module load 2022
+module load Anaconda3/2022.05
+
+# Activate your environment
+source activate dl2023
+# Run your code
+srun python -u train.py --num_epochs 200 --alpha 0 --beta 0 --save_model_name 200_epoch_0_alpha_0_beta_newcosscheduler_CIFAR10_withaugs.pt --lr 0.03 --weight_decay 5e-4
