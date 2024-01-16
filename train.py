@@ -40,7 +40,7 @@ args = parser.parse_args()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-wrn_builder = build_WideResNet(1, 10, 2, 0.01, 0.1, 0.5)
+wrn_builder = build_WideResNet(1, 28, 2, 0.01, 0.1, 0.5)
 wrn = wrn_builder.build(10)
 wrn = wrn.to(device)
 
@@ -140,6 +140,8 @@ for epoch in range(num_epochs):
     running_m_loss = 0
     running_OT_loss = 0
     running_CE_loss = 0
+
+    wrn.train()
 
     for batch in trainloader:
 
