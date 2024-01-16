@@ -73,6 +73,9 @@ class TextEncoder(nn.Module):
 
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
+        # eot_token is the fullstop (end of text)
+        # they want to condense the transformer features self.transformer(x) to a single vector and 
+        # the eot token acts as a summarization vector of the whole input prompt's features
         x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
         return x
 
@@ -115,18 +118,26 @@ class PromptLearner(nn.Module):
         name_lens = [len(_tokenizer.encode(name)) for name in classnames]
         prompts = [prompt_prefix + " " + name + "." for name in classnames]
 
+        # Tokenized prompts are whole sentences like "XXXXXXXX <label>."
+        # Here they are turned to clip vocabulary tokens
         tokenized_prompts = torch.cat([clip.tokenize(p) for p in prompts]) # (10, 77)
-        tokenized_prompts = tokenized_prompts.repeat(self.N,1) 
-
+        # This adds an extra dimension of N, repeting tokenized_prompts along it
+        tokenized_prompts = tokenized_prompts.repeat(self.N,1)
 
         with torch.no_grad():
+            # Embedded vectors of tokenized_prompts
             embedding = clip_model.token_embedding(tokenized_prompts).type(dtype) 
         print('tokenized prompts:', embedding.shape, 'ctx: ', self.ctx.shape)
 
         # These token vectors will be saved when in save_model(),
         # but they should be ignored in load_model() as we want to use
         # those computed using the current class names
+        # token prefix is embedded("XXXXXXXX <label>.")[0] , which is just embedded("X")
         self.register_buffer("token_prefix", embedding[:, :1, :])  # SOS
+        # token_suffix is embedded("<label>.")
+        # EOS token is the full stop
+        # we need it for rendering a matrix of vectors to a single feature vector later in TextEncoder
+        # it is like a cls token in ViT (my interpretation)
         self.register_buffer("token_suffix", embedding[:, 1 + n_ctx :, :])  # CLS, EOS
 
         self.n_cls = n_cls
@@ -156,6 +167,7 @@ class PromptLearner(nn.Module):
 
         ctx = self._ctx_shuffle(prefix, suffix, ctx)
 
+        # This if is about different ordering of the prefix, ctx and suffix
         if self.class_token_position == "end":
             prompts = torch.cat(
                 [
