@@ -195,6 +195,23 @@ class WideResNetPrompt(nn.Module):
             label_distribution, _ = sim_matrix_pre(
                 targets, text_features, self.emb_temp, token_fc = None, noise = False)
             return out, emb_matrix, emb, label_distribution
+        
+    def get_logits(self, x):
+
+        out = self.conv1(x)
+        out = self.block1(out)
+        out = self.block2(out)  
+        out = self.block3(out)
+        out = self.relu(self.bn1(out))
+        feature_maps = out.view(out.shape[0], out.shape[1], -1)
+
+        out = F.adaptive_avg_pool2d(out, 1)
+        
+        out = out.view(-1, self.channels)
+
+        out = self.fc(out)
+
+        return out
 
     def _emb_SimMatrix(self, emb, temp, norm = True):
 
