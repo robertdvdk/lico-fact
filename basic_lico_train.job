@@ -17,4 +17,4 @@ module load Anaconda3/2022.05
 # Activate your environment
 source activate dl2023
 # Run your code
-srun python -u train.py --num_epochs 200 --alpha 10 --beta 1 --save_model_name 200_epoch_10_alpha_1_beta_newcosscheduler_CIFAR10_withaugs.pt --lr 0.03
+srun python -u train.py --num_epochs 200 --alpha 10 --beta 1 --save_model_name 200_epoch_10_alpha_1_beta_newcosscheduler_CIFAR10_withaugs.pt --lr 0.03 --weight_decay 5e-4
