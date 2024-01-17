@@ -82,6 +82,7 @@ class WideResNetPrompt(nn.Module):
         assert ((depth - 4) % 6 == 0)
         n = (depth - 4) / 6
         block = BasicBlock
+        self.image_feature_dim = 64 if args is None else args.image_feature_dim
         # 1st conv before any network block
         self.conv1 = nn.Conv2d(3, channels[0], kernel_size=3, stride=1,
                                padding=1, bias=True)
@@ -118,7 +119,6 @@ class WideResNetPrompt(nn.Module):
         '''
         Prompt Learning
         '''
-
         # Text encoder
         self.clip_model = load_clip_to_cpu()
         self.text_encoder = TextEncoder(self.clip_model)
@@ -136,7 +136,7 @@ class WideResNetPrompt(nn.Module):
             nn.Linear(512, 512),
             nn.Dropout(0.5),
             nn.ReLU(),
-            nn.Linear(512, 64)
+            nn.Linear(512, self.image_feature_dim)
             )
 
         # self.up = nn.Upsample(scale_factor=2, mode='bilinear')
@@ -176,6 +176,7 @@ class WideResNetPrompt(nn.Module):
             
             feature_maps = F.normalize(feature_maps, dim = 2)
             text_features_w = F.normalize(text_features_w, dim = 2)
+           
             with torch.no_grad():
                 P, C = w_distance(feature_maps, text_features_w)
             w_loss = torch.sum(P * C, dim=(-2, -1)).mean()
@@ -222,7 +223,7 @@ class WideResNetPrompt(nn.Module):
 
 class build_WideResNet:
     def __init__(self, first_stride=1, depth=28, widen_factor=2, bn_momentum=0.01, leaky_slope=0.0, dropRate=0.0,
-                 use_embed=False, is_remix=False):
+                 use_embed=False, is_remix=False, args=None):
         self.first_stride = first_stride
         self.depth = depth
         self.widen_factor = widen_factor
@@ -231,6 +232,7 @@ class build_WideResNet:
         self.leaky_slope = leaky_slope
         self.use_embed = use_embed
         self.is_remix = is_remix
+        self.args = args
 
     def build(self, classnames):
         return WideResNetPrompt(
@@ -240,6 +242,7 @@ class build_WideResNet:
             widen_factor=self.widen_factor,
             drop_rate=self.dropRate,
             is_remix=self.is_remix,
+            args=self.args
         )
 
 
