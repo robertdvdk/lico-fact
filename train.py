@@ -49,7 +49,7 @@ def main():
     parser.add_argument('--sinkhorn_max_iters', type=int, default=1000, help='Max iterations for sinkhorn algorithm')
     parser.add_argument('--train_dataset', type=str, default='cifar10', help='Which dataset to train on')
     parser.add_argument('--save_path', type=str, default='./trained_models/', help='Path to save trained models')
-    parser.add_argument('--save_model_name', type=str, default='wrn28-2.pt', help='Model name to save')
+    parser.add_argument('--save_model_name', type=str, default='wrn28-2', help='Model name to save')
     parser.add_argument('--depth', type=int, default=28, help='WideResNet depth')
     parser.add_argument('--width', type=int, default=2, help='WideResNet widening factor')
     parser.add_argument('--data_root', type=str, default='../../data/', help='Path to data')
@@ -67,9 +67,9 @@ def main():
     writer.add_text('Beta', str(args.beta))
     writer.add_text('Batch size', str(args.batch_size))
 
+    full_model_save_path = args.save_path + args.save_model_name
 
-
-    with open(f'{args.save_path}/{args.save_model_name}.json', 'w') as f:
+    with open(f'{full_model_save_path}/{args.save_model_name}.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -115,10 +115,8 @@ def main():
 
 
 
-        classes = ('plane', 'car', 'bird', 'cat',
+        classnames = ('plane', 'car', 'bird', 'cat',
                'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-        num_classes = 10
 
     elif args.train_dataset == 'cifar100':
         trainset_full = torchvision.datasets.CIFAR100(root=args.data_root + args.train_dataset, train=True,
@@ -135,13 +133,30 @@ def main():
         testset = torchvision.datasets.CIFAR100(root=args.data_root + args.train_dataset, train=False,
                                                download=True, transform=val_transform)
 
-        classes = ('plane', 'car', 'bird', 'cat',
-               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+        classnames = ('beaver', 'dolphin', 'otter', 'seal', 'whale',
+                      'aquarium fish', 'flatfish', 'ray', 'shark', 'trout',
+                      'orchids', 'poppies', 'roses', 'sunflowers', 'tulips',
+                      'bottles', 'bowls', 'cans', 'cups', 'plates',
+                      'apples', 'mushrooms', 'oranges', 'pears', 'sweet peppers',
+                      'clock', 'computer keyboard', 'lamp', 'telephone', 'television',
+                      'bed', 'chair', 'couch', 'table', 'wardrobe',
+                      'bee', 'beetle', 'butterfly', 'caterpillar', 'cockroach',
+                      'bear', 'leopard', 'lion', 'tiger', 'wolf',
+                      'bridge', 'castle', 'house', 'road', 'skyscraper',
+                      'cloud', 'forest', 'mountain', 'plain', 'sea',
+                      'camel', 'cattle', 'chimpanzee', 'elephant', 'kangaroo',
+                      'fox', 'porcupine', 'possum', 'raccoon', 'skunk',
+                      'crab', 'lobster', 'snail', 'spider', 'worm',
+                      'baby', 'boy', 'girl', 'man', 'woman',
+                      'crocodile', 'dinosaur', 'lizard', 'snake', 'turtle',
+                      'hamster', 'mouse', 'rabbit', 'shrew', 'squirrel',
+                      'maple', 'oak', 'palm', 'pine', 'willow',
+                      'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train',
+                      'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor')
 
-        num_classes = 100
 
     wrn_builder = build_WideResNet(1, args.depth, args.width, 0.01, 0.1, 0.5)
-    wrn = wrn_builder.build(num_classes)
+    wrn = wrn_builder.build(classnames)
     wrn = wrn.to(device)
 
 
@@ -248,13 +263,10 @@ def main():
             best_model = wrn.state_dict()
             best_val_loss = val_loss
 
-
-    full_model_save_path = args.save_path + args.save_model_name
-
     if not os.path.exists(os.path.dirname(full_model_save_path)):
         os.makedirs(os.path.dirname(full_model_save_path))
 
-    torch.save(best_model, full_model_save_path)
+    torch.save(best_model, f'{full_model_save_path}/{args.save_model_name}.pt')
 
     writer.flush()
 
