@@ -214,6 +214,7 @@ dependencies:
   - urllib3=1.26.18=py311h06a4308_0
   - utf8proc=2.6.1=h27cfd23_0
   - werkzeug=2.2.3=py311h06a4308_0
+  - wget=3.2
   - wheel=0.41.2=py311h06a4308_0
   - xxhash=0.8.0=h7f8727e_3
   - xz=5.4.5=h5eee18b_0
