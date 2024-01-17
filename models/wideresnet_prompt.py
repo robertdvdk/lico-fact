@@ -76,7 +76,7 @@ class NetworkBlock(nn.Module):
 
 
 class WideResNetPrompt(nn.Module):
-    def __init__(self, first_stride, num_classes, depth=28, widen_factor=2, drop_rate=0.0, is_remix=False, args = None):
+    def __init__(self, first_stride, classnames, depth=28, widen_factor=2, drop_rate=0.0, is_remix=False, args = None):
         super(WideResNetPrompt, self).__init__()
         channels = [16, 16 * widen_factor, 32 * widen_factor, 64 * widen_factor]
         assert ((depth - 4) % 6 == 0)
@@ -97,7 +97,7 @@ class WideResNetPrompt(nn.Module):
         # global average pooling and classifier
         self.bn1 = nn.BatchNorm2d(channels[3], momentum=0.001, eps=0.001)
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=False)
-        self.fc = nn.Linear(channels[3], num_classes)
+        self.fc = nn.Linear(channels[3], len(classnames))
         self.channels = channels[3]
 
 
@@ -118,8 +118,6 @@ class WideResNetPrompt(nn.Module):
         '''
         Prompt Learning
         '''
-        classnames = ['plane', 'car', 'automobile', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-        # classnames = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 
         # Text encoder
         self.clip_model = load_clip_to_cpu()
@@ -163,14 +161,10 @@ class WideResNetPrompt(nn.Module):
 
         emb_temp = self.emb_temp
         emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp, norm = True)
-        
 
-        text_features = []
         prompts = self.prompt_learner() # [100, 77, 512]
         text_features = self.text_encoder(prompts, self.tokenized_prompts) # [100, 512]
 
-
-        
         if language and mode == 'train':
             out = self.fc(out)
 
@@ -238,11 +232,11 @@ class build_WideResNet:
         self.use_embed = use_embed
         self.is_remix = is_remix
 
-    def build(self, num_classes):
+    def build(self, classnames):
         return WideResNetPrompt(
             first_stride=self.first_stride,
             depth=self.depth,
-            num_classes=num_classes,
+            classnames=classnames,
             widen_factor=self.widen_factor,
             drop_rate=self.dropRate,
             is_remix=self.is_remix,
