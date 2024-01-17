@@ -16,7 +16,7 @@ from pytorch_grad_cam import GradCAM
 from PIL import Image
 from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
 
-method = "GradCAM"
+method = "GradCAM++"
 
 parser = argparse.ArgumentParser(description='Train LICO')
 
@@ -31,7 +31,7 @@ args = parser.parse_args()
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 wrn_builder = build_WideResNet(1, 10, 2, 0.01, 0.1, 0.5)
-model = wrn_builder.build(10)
+model = wrn_builder.build(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
 model = model.to(device)
 
 test_transform = transforms.Compose([
@@ -98,7 +98,7 @@ def insertion(images, saliency_maps, indices, targets, model, pixel_batch_size, 
         # get class probabilities
 
         with torch.no_grad():
-            logits = model.get_logits(inputs)
+            logits = model(inputs)
             cur_probs = torch.gather(torch.softmax(logits, dim=-1), 1, targets.unsqueeze(1))
             probs[:, i] = cur_probs.squeeze(1)
 
@@ -144,7 +144,7 @@ def deletion(images, saliency_maps, indices, targets, model, pixel_batch_size):
         
         with torch.no_grad():
             # get class probabilities
-            logits = model.get_logits(inputs)
+            logits = model(inputs)
             cur_probs = torch.gather(torch.softmax(logits, dim=-1), 1, targets.unsqueeze(1))
             probs[:, i] = cur_probs.squeeze(1)
 
@@ -186,22 +186,89 @@ for batch in testloader:
     x, y = x.to(device), y.to(device)
 
     # get necessary prereqs for insertion and deletion scores
-    saliency_maps = get_saliency_maps(x)
+    target_layer = model.block3.layer[0].conv2
+
+    def save_features(module, input, output):
+        global features
+        features = output.detach()
+
+
+    def save_gradients(module, input, output):
+        global gradients
+        gradients = output[0].detach()
 
     if method == "GradCAM":
-        with GradCAM(model=model,
-                     target_layers=model.fc,
-                     use_cuda=torch.cuda.is_available()) as cam:
-            grayscale_cam = cam(input_tensor=x,
-                                targets=y)[0, :]
+        # 1. Forward pass to get the outputs and find the target layer's output
+        feature_handle = target_layer.register_forward_hook(save_features)
+        gradient_handle = target_layer.register_backward_hook(save_gradients)
+
+        output = model(x)
+        feature_handle.remove()
+
+        # 2. Get predicted class and compute gradients
+        _, predicted_classes = torch.max(output, dim=1)
+        class_scores = output.gather(1, predicted_classes.view(-1, 1)).squeeze()
+
+        # 3. Backward pass
+        model.zero_grad()
+        class_scores.backward(torch.ones_like(class_scores))
+        gradient_handle.remove()
+
+        # 4. Weight the feature map with the gradients
+        pooled_gradients = torch.mean(gradients, dim=[2, 3])
+        for i in range(features.shape[1]):
+            features[:, i, :, :] *= pooled_gradients[:, i].view(-1, 1, 1)
+
+        # 5: Generate the heatmap
+        heatmap = torch.mean(features, dim=1).squeeze()
+        heatmap = F.relu(heatmap)
+        heatmap /= torch.max(heatmap)
+
+        # 6. Resize heatmap to match input image size and return
+        saliency_maps = F.interpolate(heatmap.unsqueeze(1), size=(x.shape[2], x.shape[3]), mode='bilinear', align_corners=False).squeeze()
     elif method == "GradCAM++":
-        continue
+        forward_handle = target_layer.register_forward_hook(save_features)
+        backward_handle = target_layer.register_backward_hook(save_gradients)
+
+        output = model(x)
+        forward_handle.remove()
+
+        _, predicted_classes = torch.max(output, dim=1)
+        class_scores = output.gather(1, predicted_classes.view(-1, 1)).squeeze()
+
+        model.zero_grad()
+        class_scores.backward(torch.ones_like(class_scores))
+        backward_handle.remove()
+
+        gradients_power_2 = gradients ** 2
+        gradients_power_3 = gradients_power_2 * gradients
+
+        global_sum = features.view(features.size(0), features.size(1), -1).sum(dim=2).view(
+            features.size(0), features.size(1), 1, 1)
+
+        alpha_num = gradients_power_2
+        alpha_denom = gradients_power_2 * 2 + global_sum * gradients_power_3
+
+        alpha_denom = torch.where(alpha_denom != 0, alpha_denom, torch.ones_like(alpha_denom))
+
+        alphas = alpha_num / alpha_denom
+        alpha_normalization_constant = torch.sum(alphas, dim=(2, 3), keepdim=True)
+        alphas /= alpha_normalization_constant
+
+        weights = torch.sum(alphas * F.relu(gradients), dim=(2, 3), keepdim=True)
+        grad_cam_map = torch.sum(weights * features, dim=1)
+
+        grad_cam_map = F.relu(grad_cam_map)
+        grad_cam_map = F.interpolate(grad_cam_map.unsqueeze(1), x.shape[2:], mode='bilinear', align_corners=False)
+
+        saliency_maps = grad_cam_map.squeeze()
     elif method == "GroupCAM":
-        continue
+        saliency_maps = None
     elif method == "RISE":
-        continue
+        saliency_maps = None
     else:
-        raise KeyError("method not support")
+        saliency_maps = get_saliency_maps(x)
+        print("{} method not supported - generating a random saliency map. Please use one of [GradCAM, GradCAM++, GroupCAM, RISE]".format(method))
 
     B, H, W = saliency_maps.shape
     num_pixels = H*W
