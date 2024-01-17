@@ -9,7 +9,7 @@ def sim_matrix_pre(labels, text_tensors, temp, token_fc, noise = False):
     batch_text_tensors = torch.cuda.FloatTensor(labels.size(0), text_tensors.size(1))
     for i in range(labels.size(0)):
         class_i = int(labels[i].data.cpu().numpy())
-        batch_text_tensors[i, :] = text_tensors[class_i, :]
+        batch_text_tensors[i, :] = text_tensors[class_i, ...]
 
     if token_fc is not None:
         batch_text_tensors = token_fc(batch_text_tensors)

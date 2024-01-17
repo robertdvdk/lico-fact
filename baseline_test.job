@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH --partition=gpu
+#SBATCH --partition=gpu_mig
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=9
 #SBATCH --gpus=1
 #SBATCH --job-name=baseline_test
 #SBATCH --ntasks=1
-#SBATCH --time=02:30:00
+#SBATCH --time=00:15:00
 #SBATCH --mem=32000M
 #SBATCH --output=baseline_test.out
 

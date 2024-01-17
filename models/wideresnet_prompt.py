@@ -212,6 +212,43 @@ class WideResNetPrompt(nn.Module):
         out = self.fc(out)
 
         return out
+    
+    def get_features(self, x):
+
+        with torch.no_grad():
+            
+            out = self.conv1(x)
+            out = self.block1(out)
+            out = self.block2(out)  
+            out = self.block3(out)
+            out = self.relu(self.bn1(out))
+            feature_maps = out.view(out.shape[0], out.shape[1], -1)
+
+            out = F.adaptive_avg_pool2d(out, 1)
+            
+            out = out.view(-1, self.channels)
+            emb = out
+
+            emb_temp = self.emb_temp
+            emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp, norm = True)
+            
+
+            text_features = []
+            prompts = self.prompt_learner() # [100, 77, 512]
+            text_features = self.text_encoder(prompts, self.tokenized_prompts) # [100, 512]
+
+            out = self.fc(out)
+
+            text_features_w = self.mlp(text_features)
+            text_features_w = text_features_w.view(text_features_w.shape[0], -1) # (100, 64)
+            text_features_w = text_features_w.expand(feature_maps.shape[0], text_features_w.shape[0], text_features_w.shape[1])
+            
+            feature_maps = F.normalize(feature_maps, dim = 2)
+            text_features_w = F.normalize(text_features_w, dim = 2)
+
+        return feature_maps, text_features_w
+
+
 
     def _emb_SimMatrix(self, emb, temp, norm = True):
 

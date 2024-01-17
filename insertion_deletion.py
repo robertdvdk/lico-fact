@@ -12,14 +12,16 @@ import sys
 from torchvision.transforms import GaussianBlur
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
+from utils.RISE import *
 
-parser = argparse.ArgumentParser(description='Train LICO')
+parser = argparse.ArgumentParser(description='Insertion deletion values')
 
 parser.add_argument('--test_dataset', type=str, default='CIFAR10', help='Which dataset to train on')
 parser.add_argument('--model_path', type=str, default=None, help='Path to model')
 parser.add_argument('--batch_size', type=int, default=64, help='Testing batch size')
 parser.add_argument('--pixel_batch_size', type=int, default=10, help='Number of pixels to insert/delete at a time')
 parser.add_argument('--sigma', type=float, default=5., help='Sigma of GaussianBlur')
+parser.add_argument('--saliency_method', type=str, default='RISE', help='Which method to use to obtain saliency maps')
 
 args = parser.parse_args()
 
@@ -50,7 +52,7 @@ else:
     sys.exit()
 
 testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
-                                         shuffle=False, num_workers=2)
+                                         shuffle=True, num_workers=2)
     
 # load the model
 
@@ -60,9 +62,32 @@ model.eval()
 
 print("Successfully loaded model")
 
-def get_saliency_maps(images):
+def get_saliency_maps(images, method='random', generator=None, targets=None):
     ''' just do random saliency maps for now to test'''
-    return torch.rand((images.shape[0], images.shape[2], images.shape[3]))
+
+    if method == 'random':
+        return torch.rand((images.shape[0], images.shape[2], images.shape[3]))
+    
+    if method == 'RISE':
+
+        # for the implementation we use we need to do RISE individually for each image
+
+        saliency_maps = torch.empty((images.shape[0], images.shape[2], images.shape[3]))
+
+        for i in range(images.shape[0]):
+
+            x = images[i, ...]
+            y = targets[i]
+
+            cur_saliency_map = generator.forward(x)[int(y), :, :]
+            saliency_maps[i, ...] = cur_saliency_map.unsqueeze(0)
+        
+        return saliency_maps
+
+
+
+
+
 
 def insertion(images, saliency_maps, indices, targets, model, pixel_batch_size, blur):
 
@@ -159,6 +184,7 @@ def deletion(images, saliency_maps, indices, targets, model, pixel_batch_size):
 def viz_insertion_deletion(probs, plot_type='Unspecified', filename='plot.png'):
 
     x = np.linspace(0, 1, len(probs))
+
     plt.clf()
     plt.scatter(x, probs)
     plt.plot(x, probs)
@@ -168,6 +194,49 @@ def viz_insertion_deletion(probs, plot_type='Unspecified', filename='plot.png'):
     plt.savefig(filename)
         
 
+# test out RISE for a single example
+
+'''
+
+rise = RISE(model, input_size=(32,32), initial_mask_size=(7,7))
+
+x, y = next(iter(testloader))
+x, y = x.to(device), y.to(device)
+
+x = x[1, ...].unsqueeze(0)
+y = y[1].unsqueeze(0)
+
+saliency_maps = rise.forward(x)[int(y), :, :]
+print(saliency_maps.shape)
+H, W = saliency_maps.shape
+num_pixels = H*W
+
+flat_saliency_maps = saliency_maps.view(1, -1)
+
+_, indices = torch.topk(flat_saliency_maps, num_pixels, dim=1)
+indices = torch.stack((indices // W, indices % W), dim=-1)
+
+# get insertion and deletion probs
+
+insertion_probs = insertion(x, saliency_maps, indices, y, model, 10, blur)
+deletion_probs = deletion(x, saliency_maps, indices, y, model, 10)
+
+insertion_probs = insertion_probs.squeeze().detach().numpy()
+deletion_probs = deletion_probs.squeeze().detach().numpy()
+
+viz_insertion_deletion(insertion_probs, "Insertion", './plots/RISE_insertion_test.png')
+viz_insertion_deletion(deletion_probs, "Deletion", './plots/RISE_deletion_test.png')
+
+'''
+
+
+if args.saliency_method == 'RISE':
+
+    generator = RISE(model, input_size=(32,32), initial_mask_size=(7,7))
+
+else:
+    
+    generator = None
 
 blur = GaussianBlur(int(2 * args.sigma - 1), args.sigma)
 
@@ -181,8 +250,8 @@ for batch in testloader:
     x, y = x.to(device), y.to(device)
 
     # get necessary prereqs for insertion and deletion scores
-    saliency_maps = get_saliency_maps(x)
-
+    saliency_maps = get_saliency_maps(x, args.saliency_method, generator=generator, targets=y)
+    
     B, H, W = saliency_maps.shape
     num_pixels = H*W
 
@@ -215,29 +284,15 @@ for batch in testloader:
 
     torch.cuda.empty_cache()
 
+    if num_batches == 10:
+
+        break
+
+
 avg_auc_insertion = running_avg_auc_insertion/num_batches
 avg_auc_deletion = running_avg_auc_deletion/num_batches
 
 print(f"Average AUC insertion for given model/dataset: {avg_auc_insertion}")
 print(f"Average AUC deletion for given model/dataset: {avg_auc_deletion}")
 print(f"Average AUC insertion - deletion for given model/dataset: {avg_auc_insertion - avg_auc_deletion}")
-
-
-
-
-
-
-    
-
-
-
-    
-
-
-
-
-
-
-
-    
 
