@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_mig
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=9
+#SBATCH --gpus=1
+#SBATCH --job-name=insertion_deletion_test
+#SBATCH --ntasks=1
+#SBATCH --time=00:15:00
+#SBATCH --mem=32000M
+#SBATCH --output=insertion_deletion_test.out
+
+module purge
+module load 2022
+module load Anaconda3/2022.05
+
+# Activate your environment (note that you need to add transformers library to dl2023 for this to work)
+source activate dl2023
+# Run your code
+srun python -u insertion_deletion.py --model_path ./trained_models/200_epoch_0_alpha_0_beta_newcosscheduler_CIFAR10_withaugs.pt --batch_size 32
+
+
