@@ -10,6 +10,7 @@ from utils.misc import *
 import argparse
 import os
 from tqdm import tqdm
+from utils.data import ImagenetteDataset
 from torch.utils.tensorboard import SummaryWriter
 import json
 
@@ -124,6 +125,7 @@ def main():
     parser.add_argument('--data_root', type=str, default='../../data/', help='Path to data')
     parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for dataloader')
     parser.add_argument('--seed', type=int, default=42, help='Seed for the random number generator')
+    parser.add_argument('--image_feature_dim', type=int, default=64, help='Feature dimension for image features of image encoder')
 
     args = parser.parse_args()
 
@@ -159,13 +161,20 @@ def main():
 
     dataset_statistics = {
         'cifar10': ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        'cifar100': ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+        'cifar100': ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
+        'imagenette': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    }
+
+    dataset_image_sizes = {
+        'cifar10': 32,
+        'cifar100': 32,
+        'imagenette': 320
     }
 
     try:
         train_transform = transforms.Compose([
             transforms.RandomHorizontalFlip(),
-            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            transforms.RandomCrop(dataset_image_sizes[args.train_dataset], padding=4, padding_mode='reflect'),
             transforms.ToTensor(),
             transforms.Normalize(dataset_statistics[args.train_dataset][0],
                                  dataset_statistics[args.train_dataset][1])
@@ -236,9 +245,26 @@ def main():
                       'maple', 'oak', 'palm', 'pine', 'willow',
                       'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train',
                       'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor')
+    elif args.train_dataset == "imagenette":
+        trainset_full = ImagenetteDataset(args.data_root + args.train_dataset, 320, 
+                                          download=True, validation=False, transform=train_transform)
+
+        num_train = len(trainset_full)
+        num_val = int(num_train * args.val_prop)
+        num_train = num_train - num_val
+
+        trainset, valset = torch.utils.data.random_split(trainset_full, [num_train, num_val])
+
+        valset.transforms = val_transform
+
+        testset = ImagenetteDataset(args.data_root + args.train_dataset, 320, 
+                                          download=True, validation=True, transform=val_transform)
+
+        classnames = ("tench", "English springer", "cassette player", "chain saw", 
+                      "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute")
 
 
-    wrn_builder = build_WideResNet(1, args.depth, args.width, 0.01, 0.1, 0.5)
+    wrn_builder = build_WideResNet(1, args.depth, args.width, 0.01, 0.1, 0.5, args=args)
     wrn = wrn_builder.build(classnames)
     wrn = wrn.to(device)
 
