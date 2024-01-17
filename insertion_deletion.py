@@ -12,6 +12,11 @@ import sys
 from torchvision.transforms import GaussianBlur
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
+from pytorch_grad_cam import GradCAM
+from PIL import Image
+from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
+
+method = "GradCAM"
 
 parser = argparse.ArgumentParser(description='Train LICO')
 
@@ -182,6 +187,21 @@ for batch in testloader:
 
     # get necessary prereqs for insertion and deletion scores
     saliency_maps = get_saliency_maps(x)
+
+    if method == "GradCAM":
+        with GradCAM(model=model,
+                     target_layers=model.fc,
+                     use_cuda=torch.cuda.is_available()) as cam:
+            grayscale_cam = cam(input_tensor=x,
+                                targets=y)[0, :]
+    elif method == "GradCAM++":
+        continue
+    elif method == "GroupCAM":
+        continue
+    elif method == "RISE":
+        continue
+    else:
+        raise KeyError("method not support")
 
     B, H, W = saliency_maps.shape
     num_pixels = H*W
