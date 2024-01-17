@@ -27,6 +27,89 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 
+def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_distance, num_epochs, device, writer,
+          full_model_save_path, save_model_name):
+
+
+    # training loop
+
+    CELoss = nn.CrossEntropyLoss()
+
+    best_model = None
+    best_val_loss = float("inf")
+
+    for epoch in range(num_epochs):
+
+        num_batches = 0
+        running_loss = 0
+
+        running_m_loss = 0
+        running_OT_loss = 0
+        running_CE_loss = 0
+        net.train()
+        for batch in tqdm(trainloader):
+
+            x, y = batch
+            x, y = x.to(device), y.to(device)
+
+            # out: output logits, emb_matrix: similarity matrix of the feature maps
+            # emb: unrolled feature maps, w_loss: OT loss
+            # label_distribution: similarity matrix of the embedded prompts
+
+            out, emb_matrix, emb, w_loss, label_distribution = net(x, targets=y, w_distance=w_distance)
+
+            # cross-entropy loss
+            ce_loss = CELoss(out, y)
+
+            # manifold loss
+            m_loss = calculate_manifold_loss(label_distribution, emb_matrix)
+
+            # get the full loss
+            loss = ce_loss + alpha*m_loss + beta*w_loss
+
+            # training step
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+
+            running_loss += loss.item()
+            running_m_loss += alpha*float(m_loss)
+            running_OT_loss += beta*float(w_loss)
+            running_CE_loss += float(ce_loss)
+            num_batches += 1
+
+
+        net.eval()
+        avg_loss = running_loss/num_batches
+
+        avg_m_loss = running_m_loss/num_batches
+        avg_OT_loss = running_OT_loss/num_batches
+        avg_CE_loss = running_CE_loss/num_batches
+
+        writer.add_scalar('Average loss', round(avg_loss, 3), epoch)
+        writer.add_scalar('Average manifold loss', round(avg_m_loss, 3), epoch)
+        writer.add_scalar('Average OT loss', round(avg_OT_loss, 3), epoch)
+        writer.add_scalar('Average CE loss', round(avg_CE_loss, 3), epoch)
+
+        test_acc = get_accuracy(net, valloader, device)
+        writer.add_scalar('Validation accuracy', round(test_acc, 3), epoch)
+
+        # calculate val loss to do model selection
+
+        val_loss = get_loss(net, valloader, device, w_distance, alpha, beta)
+
+        if val_loss < best_val_loss:
+            best_model = net.state_dict()
+            best_val_loss = val_loss
+
+    if not os.path.exists(os.path.dirname(full_model_save_path)):
+        os.makedirs(os.path.dirname(full_model_save_path))
+
+    torch.save(best_model, f'{full_model_save_path}/{save_model_name}.pt')
+
+    writer.flush()
+
 def main():
 
     '''
@@ -170,105 +253,19 @@ def main():
                                              shuffle=False, num_workers=args.num_workers)
 
 
-    # training loop
-
     num_epochs = args.num_epochs
     num_steps = num_epochs*int(len(trainset)/args.batch_size)
 
     w_distance = SinkhornDistance(args.sinkhorn_eps, args.sinkhorn_max_iters)
 
-    CELoss = nn.CrossEntropyLoss()
     optimizer = SGD(wrn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = CosineAnnealingStepLR(optimizer, T_max=num_steps)
 
     alpha = args.alpha
     beta = args.beta
 
-    best_model = None
-    best_val_loss = float("inf")
-
-    for epoch in range(num_epochs):
-
-        num_batches = 0
-        running_loss = 0
-
-        running_m_loss = 0
-        running_OT_loss = 0
-        running_CE_loss = 0
-        wrn.train()
-        for batch in tqdm(trainloader):
-
-            x, y = batch
-            x, y = x.to(device), y.to(device)
-
-            # out: output logits, emb_matrix: similarity matrix of the feature maps
-            # emb: unrolled feature maps, w_loss: OT loss
-            # label_distribution: similarity matrix of the embedded prompts
-
-            out, emb_matrix, emb, w_loss, label_distribution = wrn(x, targets=y, w_distance=w_distance)
-
-            # cross-entropy loss
-            ce_loss = CELoss(out, y)
-
-            # manifold loss
-            m_loss = calculate_manifold_loss(label_distribution, emb_matrix)
-
-            # get the full loss
-            loss = ce_loss + alpha*m_loss + beta*w_loss
-
-            # training step
-            optimizer.zero_grad()
-
-            loss.backward()
-
-            optimizer.step()
-
-            scheduler.step()
-
-            running_loss += loss.item()
-
-            running_m_loss += alpha*float(m_loss)
-            running_OT_loss += beta*float(w_loss)
-            running_CE_loss += float(ce_loss)
-
-            num_batches += 1
-
-            '''
-            for param_group in optimizer.param_groups:
-                print("Current learning rate:", param_group['lr'])
-            '''
-
-
-
-        wrn.eval()
-        avg_loss = running_loss/num_batches
-
-        avg_m_loss = running_m_loss/num_batches
-        avg_OT_loss = running_OT_loss/num_batches
-        avg_CE_loss = running_CE_loss/num_batches
-
-        writer.add_scalar('Average loss', round(avg_loss, 3), epoch)
-        writer.add_scalar('Average manifold loss', round(avg_m_loss, 3), epoch)
-        writer.add_scalar('Average OT loss', round(avg_OT_loss, 3), epoch)
-        writer.add_scalar('Average CE loss', round(avg_CE_loss, 3), epoch)
-
-        test_acc = get_accuracy(wrn, valloader, device)
-        writer.add_scalar('Validation accuracy', round(test_acc, 3), epoch)
-
-        # calculate val loss to do model selection
-
-        val_loss = get_loss(wrn, valloader, args, device)
-
-        if val_loss < best_val_loss:
-            best_model = wrn.state_dict()
-            best_val_loss = val_loss
-
-    if not os.path.exists(os.path.dirname(full_model_save_path)):
-        os.makedirs(os.path.dirname(full_model_save_path))
-
-    torch.save(best_model, f'{full_model_save_path}/{args.save_model_name}.pt')
-
-    writer.flush()
+    train(wrn, trainloader, valloader, optimizer, scheduler, alpha, beta, w_distance, num_epochs, device, writer,
+          full_model_save_path, args.save_model_name)
 
         
 if __name__=="__main__":

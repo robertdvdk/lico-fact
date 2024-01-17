@@ -33,14 +33,13 @@ def get_accuracy(model, test_loader, device):
     accuracy = 100 * correct / total
     return accuracy
 
-def get_loss(model, dataloader, args, device):
+def get_loss(model, dataloader, device, w_distance, alpha, beta):
 
     # get avg loss for given dataloader, use for e.g. validation loss
 
     model.eval()
 
     CELoss = nn.CrossEntropyLoss()
-    w_distance = SinkhornDistance(args.sinkhorn_eps, args.sinkhorn_max_iters)
 
     running_loss = 0
     num_batches = 0
@@ -66,7 +65,7 @@ def get_loss(model, dataloader, args, device):
 
             # get the full loss
 
-            loss = ce_loss + args.alpha*m_loss + args.beta*w_loss
+            loss = ce_loss + alpha*m_loss + beta*w_loss
 
             running_loss += loss.item()
             num_batches += 1
