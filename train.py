@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 from torch.optim import SGD
@@ -14,24 +13,10 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import json
 
-parser = argparse.ArgumentParser(description='Train LICO')
-
-def set_seed(seed):
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-set_seed(25)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-
 
 def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_distance, num_epochs, device, writer,
           full_model_save_path, save_model_name):
-
-
-    # training loop
+    scaler = torch.cuda.amp.GradScaler(enabled=True)
 
     CELoss = nn.CrossEntropyLoss()
 
@@ -42,10 +27,10 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
 
         num_batches = 0
         running_loss = 0
-
         running_m_loss = 0
         running_OT_loss = 0
         running_CE_loss = 0
+
         net.train()
         for batch in tqdm(trainloader):
 
@@ -55,22 +40,23 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
             # out: output logits, emb_matrix: similarity matrix of the feature maps
             # emb: unrolled feature maps, w_loss: OT loss
             # label_distribution: similarity matrix of the embedded prompts
+            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=True):
+                out, emb_matrix, emb, w_loss, label_distribution = net(x, targets=y, w_distance=w_distance)
 
-            out, emb_matrix, emb, w_loss, label_distribution = net(x, targets=y, w_distance=w_distance)
+                # cross-entropy loss
+                ce_loss = CELoss(out, y)
 
-            # cross-entropy loss
-            ce_loss = CELoss(out, y)
+                # manifold loss
+                m_loss = calculate_manifold_loss(label_distribution, emb_matrix)
 
-            # manifold loss
-            m_loss = calculate_manifold_loss(label_distribution, emb_matrix)
+                # get the full loss
+                loss = ce_loss + alpha*m_loss + beta*w_loss
 
-            # get the full loss
-            loss = ce_loss + alpha*m_loss + beta*w_loss
 
-            # training step
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
             scheduler.step()
 
             running_loss += loss.item()
@@ -78,7 +64,6 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
             running_OT_loss += beta*float(w_loss)
             running_CE_loss += float(ce_loss)
             num_batches += 1
-
 
         net.eval()
         avg_loss = running_loss/num_batches
@@ -111,6 +96,7 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
     writer.flush()
 
 def main():
+    parser = argparse.ArgumentParser(description='Train LICO')
 
     '''
     parser.add_argument('--model', type=str, default='ViT-B/32', help='Pre-trained CLIP model')
@@ -137,6 +123,7 @@ def main():
     parser.add_argument('--width', type=int, default=2, help='WideResNet widening factor')
     parser.add_argument('--data_root', type=str, default='../../data/', help='Path to data')
     parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for dataloader')
+    parser.add_argument('--seed', type=int, default=42, help='Seed for the random number generator')
 
     args = parser.parse_args()
 
@@ -151,6 +138,19 @@ def main():
     writer.add_text('Batch size', str(args.batch_size))
 
     full_model_save_path = args.save_path + args.save_model_name
+
+
+    def set_seed(seed):
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
+
+    set_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
     with open(f'{full_model_save_path}/{args.save_model_name}.json', 'w') as f:
         json.dump(vars(args), f, indent=4)
@@ -242,7 +242,6 @@ def main():
     wrn = wrn_builder.build(classnames)
     wrn = wrn.to(device)
 
-
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
                                               shuffle=True, num_workers=args.num_workers)
 
@@ -261,11 +260,8 @@ def main():
     optimizer = SGD(wrn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = CosineAnnealingStepLR(optimizer, T_max=num_steps)
 
-    alpha = args.alpha
-    beta = args.beta
-
-    train(wrn, trainloader, valloader, optimizer, scheduler, alpha, beta, w_distance, num_epochs, device, writer,
-          full_model_save_path, args.save_model_name)
+    train(wrn, trainloader, valloader, optimizer, scheduler, args.alpha, args.beta, w_distance, num_epochs, device,
+          writer, full_model_save_path, args.save_model_name)
 
         
 if __name__=="__main__":
