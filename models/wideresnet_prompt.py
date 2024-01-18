@@ -188,7 +188,7 @@ class WideResNetPrompt(nn.Module):
         if mode == 'test':
             out = self.fc(out)
             label_distribution, _ = sim_matrix_pre(
-                targets, text_features, self.emb_temp, token_fc = None, noise = False)
+                targets, text_features_single, self.emb_temp, token_fc = None, noise = False)
             return out, emb_matrix, emb, label_distribution
         
     def get_logits(self, x):
