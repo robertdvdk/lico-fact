@@ -13,11 +13,11 @@ from torchvision.transforms import GaussianBlur
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 from utils.RISE import *
-from pytorch_grad_cam import GradCAM
 from PIL import Image
 from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
-
-method = "GradCAM++"
+from utils.misc import *
+from utils.GradCAM import apply_grad_cam
+from utils.GradCAM_pp import apply_grad_cam_pp
 
 parser = argparse.ArgumentParser(description='Insertion deletion values')
 
@@ -32,8 +32,9 @@ args = parser.parse_args()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+# Build model (ResNet)
 wrn_builder = build_WideResNet(1, 10, 2, 0.01, 0.1, 0.5)
-model = wrn_builder.build(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
+model = wrn_builder.build(10) #["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
 model = model.to(device)
 
 test_transform = transforms.Compose([
@@ -41,61 +42,44 @@ test_transform = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
+# Prepare dataset
 if args.test_dataset == 'CIFAR10':
-
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                           download=True, transform=test_transform)
-    
-    
-            
-    classes = ('plane', 'car', 'bird', 'cat',
-           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-    
+    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=test_transform)
+    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 else:
-
     print("Invalid training dataset chosen")
     sys.exit()
 
-testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
-                                         shuffle=True, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=True, num_workers=2)
     
 # load the model
-
 model.load_state_dict(torch.load(args.model_path, map_location=device))
-
 model.eval()
-
 print("Successfully loaded model")
 
+
 def get_saliency_maps(images, method='random', generator=None, targets=None):
-    ''' just do random saliency maps for now to test'''
-
     if method == 'random':
-        return torch.rand((images.shape[0], images.shape[2], images.shape[3]))
-
-    if method == 'RISE':
-
+        # just do random saliency maps for now to test
+        heatmap = torch.rand((images.shape[0], images.shape[2], images.shape[3]))
+    elif method == 'RISE':
         # for the implementation we use we need to do RISE individually for each image
-
-        saliency_maps = torch.empty((images.shape[0], images.shape[2], images.shape[3]))
-
+        heatmap = torch.empty((images.shape[0], images.shape[2], images.shape[3]))
         for i in range(images.shape[0]):
-
             x = images[i, ...]
             y = targets[i]
-
             cur_saliency_map = generator.forward(x)[int(y), :, :]
-            saliency_maps[i, ...] = cur_saliency_map.unsqueeze(0)
-
-        return saliency_maps
-
-
-
-
+            heatmap[i, ...] = cur_saliency_map.unsqueeze(0)
+    elif method == 'GradCAM':
+        heatmap = apply_grad_cam(model, target_layer, images)
+    elif method == 'GradCAM++':
+        heatmap = apply_grad_cam_pp(model, target_layer, images)
+    else:
+        heatmap = None
+    return heatmap
 
 
 def insertion(images, saliency_maps, indices, targets, model, pixel_batch_size, blur):
-
     '''
     images: (B, C, H, W)
     saliency maps: (B, C, H, W)
@@ -142,8 +126,8 @@ def insertion(images, saliency_maps, indices, targets, model, pixel_batch_size, 
     
     return probs
 
-def deletion(images, saliency_maps, indices, targets, model, pixel_batch_size):
 
+def deletion(images, saliency_maps, indices, targets, model, pixel_batch_size):
     '''
     images: (B, C, H, W)
     saliency maps: (B, C, H, W)
@@ -186,8 +170,8 @@ def deletion(images, saliency_maps, indices, targets, model, pixel_batch_size):
     
     return probs
 
-def viz_insertion_deletion(probs, plot_type='Unspecified', filename='plot.png'):
 
+def viz_insertion_deletion(probs, plot_type='Unspecified', filename='plot.png'):
     x = np.linspace(0, 1, len(probs))
     plt.clf()
     plt.scatter(x, probs)
@@ -235,11 +219,8 @@ viz_insertion_deletion(deletion_probs, "Deletion", './plots/RISE_deletion_test.p
 
 
 if args.saliency_method == 'RISE':
-
-    generator = RISE(model, input_size=(32,32), initial_mask_size=(7,7))
-
+    generator = RISE(model, input_size=(32, 32), initial_mask_size=(7, 7))
 else:
-
     generator = None
 
 blur = GaussianBlur(int(2 * args.sigma - 1), args.sigma)
@@ -256,87 +237,7 @@ for batch in testloader:
     # get necessary prereqs for insertion and deletion scores
     target_layer = model.block3.layer[0].conv2
 
-    def save_features(module, input, output):
-        global features
-        features = output.detach()
-
-
-    def save_gradients(module, input, output):
-        global gradients
-        gradients = output[0].detach()
-
-    if method == "GradCAM":
-        # 1. Forward pass to get the outputs and find the target layer's output
-        feature_handle = target_layer.register_forward_hook(save_features)
-        gradient_handle = target_layer.register_backward_hook(save_gradients)
-
-        output = model.get_logits(x)
-        feature_handle.remove()
-
-        # 2. Get predicted class and compute gradients
-        _, predicted_classes = torch.max(output, dim=1)
-        class_scores = output.gather(1, predicted_classes.view(-1, 1)).squeeze()
-
-        # 3. Backward pass
-        model.zero_grad()
-        class_scores.backward(torch.ones_like(class_scores))
-        gradient_handle.remove()
-
-        # 4. Weight the feature map with the gradients
-        pooled_gradients = torch.mean(gradients, dim=[2, 3])
-        for i in range(features.shape[1]):
-            features[:, i, :, :] *= pooled_gradients[:, i].view(-1, 1, 1)
-
-        # 5: Generate the heatmap
-        heatmap = torch.mean(features, dim=1).squeeze()
-        heatmap = F.relu(heatmap)
-        heatmap /= torch.max(heatmap)
-
-        # 6. Resize heatmap to match input image size and return
-        saliency_maps = F.interpolate(heatmap.unsqueeze(1), size=(x.shape[2], x.shape[3]), mode='bilinear', align_corners=False).squeeze()
-    elif method == "GradCAM++":
-        forward_handle = target_layer.register_forward_hook(save_features)
-        backward_handle = target_layer.register_backward_hook(save_gradients)
-
-        output = model.get_logits(x)
-        forward_handle.remove()
-
-        _, predicted_classes = torch.max(output, dim=1)
-        class_scores = output.gather(1, predicted_classes.view(-1, 1)).squeeze()
-
-        model.zero_grad()
-        class_scores.backward(torch.ones_like(class_scores))
-        backward_handle.remove()
-
-        gradients_power_2 = gradients ** 2
-        gradients_power_3 = gradients_power_2 * gradients
-
-        global_sum = features.view(features.size(0), features.size(1), -1).sum(dim=2).view(
-            features.size(0), features.size(1), 1, 1)
-
-        alpha_num = gradients_power_2
-        alpha_denom = gradients_power_2 * 2 + global_sum * gradients_power_3
-
-        alpha_denom = torch.where(alpha_denom != 0, alpha_denom, torch.ones_like(alpha_denom))
-
-        alphas = alpha_num / alpha_denom
-        alpha_normalization_constant = torch.sum(alphas, dim=(2, 3), keepdim=True)
-        alphas /= alpha_normalization_constant
-
-        weights = torch.sum(alphas * F.relu(gradients), dim=(2, 3), keepdim=True)
-        grad_cam_map = torch.sum(weights * features, dim=1)
-
-        grad_cam_map = F.relu(grad_cam_map)
-        grad_cam_map = F.interpolate(grad_cam_map.unsqueeze(1), x.shape[2:], mode='bilinear', align_corners=False)
-
-        saliency_maps = grad_cam_map.squeeze()
-    elif method == "GroupCAM":
-        saliency_maps = None
-    elif method == "RISE":
-        saliency_maps = None
-    else:
-        saliency_maps = get_saliency_maps(x)
-        print("{} method not supported - generating a random saliency map. Please use one of [GradCAM, GradCAM++, GroupCAM, RISE]".format(method))
+    saliency_maps = get_saliency_maps(x, generator=generator, method='GradCAM')
 
     B, H, W = saliency_maps.shape
     num_pixels = H*W
