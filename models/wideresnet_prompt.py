@@ -1,4 +1,3 @@
-import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -6,28 +5,8 @@ import torch.nn.functional as F
 from utils.label_mapping import pdists
 from utils.label_mapping import sim_matrix_pre
 from models.text_encoder import load_clip_to_cpu, TextEncoder, PromptLearner
-from models.clip import clip
-
-from models.text_encoder import get_Cifar100_ClassNames
 
 momentum = 0.001
-
-
-def mish(x):
-    """Mish: A Self Regularized Non-Monotonic Neural Activation Function (https://arxiv.org/abs/1908.08681)"""
-    return x * torch.tanh(F.softplus(x))
-
-
-class PSBatchNorm2d(nn.BatchNorm2d):
-    """How Does BN Increase Collapsed Neural Network Filters? (https://arxiv.org/abs/2001.11216)"""
-
-    def __init__(self, num_features, alpha=0.1, eps=1e-05, momentum=0.001, affine=True, track_running_stats=True):
-        super().__init__(num_features, eps, momentum, affine, track_running_stats)
-        self.alpha = alpha
-
-    def forward(self, x):
-        return super().forward(x) + self.alpha
-
 
 class BasicBlock(nn.Module):
     def __init__(self, in_planes, out_planes, stride, drop_rate=0.0, activate_before_residual=False):
@@ -125,13 +104,6 @@ class WideResNetPrompt(nn.Module):
         self.prompt_learner = PromptLearner(classnames, self.clip_model)
         self.tokenized_prompts = self.prompt_learner.tokenized_prompts
 
-        # self.token_fc = nn.Sequential(
-        #     nn.Linear(512, 1024),
-        #     # nn.Dropout(0.5),
-        #     nn.ReLU(),
-        #     nn.Linear(1024, 512)
-        #     )
-
         self.mlp = nn.Sequential(
             nn.Linear(512, 512),
             nn.Dropout(0.5),
@@ -139,56 +111,52 @@ class WideResNetPrompt(nn.Module):
             nn.Linear(512, 64)
             )
 
-        # self.up = nn.Upsample(scale_factor=2, mode='bilinear')
         self.fc_768to512 = nn.Linear(768, 512)
 
-    def forward(self, x, language=True, 
-        targets = None, 
-        w_distance = None,
-        mode = 'train'):
-
+    def forward(self, x, language=True, targets = None, w_distance = None, mode = 'train'):
         out = self.conv1(x)
         out = self.block1(out)
         out = self.block2(out)  
         out = self.block3(out)
-        out = self.relu(self.bn1(out))
-        feature_maps = out.view(out.shape[0], out.shape[1], -1)
+        out = self.relu(self.bn1(out))  # (batch_size, channels, 8, 8)
 
-        out = F.adaptive_avg_pool2d(out, 1)
-        
+        feature_maps = out.view(out.shape[0], out.shape[1], -1)  # (batch_size, channels, 64)
+        out = F.adaptive_avg_pool2d(out, 1)  # (batch_size, channels, 1, 1)
         out = out.view(-1, self.channels)
-        emb = out
+        emb = out  # (batch_size, channels)
 
+        # Calculate distance between feature vectors in a batch
         emb_temp = self.emb_temp
-        emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp, norm = True)
+        emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp)
 
-        prompts = self.prompt_learner() # [100, 77, 512]
-        text_features = self.text_encoder(prompts, self.tokenized_prompts) # [100, 512]
+        prompts = self.prompt_learner()  # (num_classes, 77, 512)
+        text_features = self.text_encoder(prompts, self.tokenized_prompts)  # (num_classes, 512)
 
         if language and mode == 'train':
             out = self.fc(out)
 
             # prompt learning
             
-            text_features_w = self.mlp(text_features)
-            text_features_w = text_features_w.view(text_features_w.shape[0], -1) # (100, 64)
-            text_features_w = text_features_w.expand(feature_maps.shape[0], text_features_w.shape[0], text_features_w.shape[1])
-            
-            feature_maps = F.normalize(feature_maps, dim = 2)
-            text_features_w = F.normalize(text_features_w, dim = 2)
-            with torch.no_grad():
-                P, C = w_distance(feature_maps, text_features_w)
+            text_features_w = self.mlp(text_features)  # (num_classes, num_context, 64)
+            # text_features_w = text_features_w.view(text_features_w.shape[0], -1)  # (num_classes, 64)
+            # text_features_w = text_features_w.expand(feature_maps.shape[0], text_features_w.shape[0], text_features_w.shape[1])  # (batch_size, num_classes, batch_size)
+            text_features_w = text_features_w[targets]  # (batch_size, num_context, 64)
+
+            feature_maps = F.normalize(feature_maps, dim=-1)  # (batch_size, num_channels, 64)
+            text_features_w = F.normalize(text_features_w, dim=-1)  # (batch_size, num_context, 64)
+
+            # with torch.no_grad():
+            P, C = w_distance(feature_maps, text_features_w)
+
             w_loss = torch.sum(P * C, dim=(-2, -1)).mean()
 
-            label_distribution, _ = sim_matrix_pre(
-                targets, text_features, self.emb_temp, token_fc = None, noise = False)
-            return out, emb_matrix, emb, w_loss, label_distribution
+            label_distribution, _ = sim_matrix_pre(targets, text_features, self.emb_temp, token_fc=None)
+            return out, emb_matrix, w_loss, label_distribution
         
-        if mode == 'test':
+        elif mode == 'test':
             out = self.fc(out)
-            label_distribution, _ = sim_matrix_pre(
-                targets, text_features, self.emb_temp, token_fc = None, noise = False)
-            return out, emb_matrix, emb, label_distribution
+            label_distribution, _ = sim_matrix_pre(targets, text_features, self.emb_temp, token_fc = None)
+            return out, emb_matrix, label_distribution
         
     def get_logits(self, x):
 
@@ -197,7 +165,6 @@ class WideResNetPrompt(nn.Module):
         out = self.block2(out)  
         out = self.block3(out)
         out = self.relu(self.bn1(out))
-        feature_maps = out.view(out.shape[0], out.shape[1], -1)
 
         out = F.adaptive_avg_pool2d(out, 1)
         
@@ -207,14 +174,8 @@ class WideResNetPrompt(nn.Module):
 
         return out
 
-    def _emb_SimMatrix(self, emb, temp, norm = True):
-
-        if norm:
-            emb = F.normalize(emb, dim = -1)
-        else:
-            pass
-
-        dist = pdists(emb, noise = False)
+    def _emb_SimMatrix(self, emb, temp):
+        dist = pdists(emb)
         matrix = F.softmax(dist / temp, dim = 1)
 
         return matrix
@@ -244,6 +205,4 @@ class build_WideResNet:
 
 
 if __name__ == '__main__':
-    wrn_builder = build_WideResNet(1, 10, 2, 0.01, 0.1, 0.5)
-    wrn = wrn_builder.build(10)
-    print(wrn)
+    pass

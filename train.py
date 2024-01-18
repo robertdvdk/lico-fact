@@ -41,7 +41,7 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
             # emb: unrolled feature maps, w_loss: OT loss
             # label_distribution: similarity matrix of the embedded prompts
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=True):
-                out, emb_matrix, emb, w_loss, label_distribution = net(x, targets=y, w_distance=w_distance)
+                out, emb_matrix, w_loss, label_distribution = net(x, targets=y, w_distance=w_distance)
 
                 # cross-entropy loss
                 ce_loss = CELoss(out, y)
@@ -51,7 +51,6 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
 
                 # get the full loss
                 loss = ce_loss + alpha*m_loss + beta*w_loss
-
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -137,6 +136,8 @@ def main():
     writer.add_text('Beta', str(args.beta))
     writer.add_text('Batch size', str(args.batch_size))
 
+    if args.save_path[-1] != '/':
+        args.save_path += '/'
     full_model_save_path = args.save_path + args.save_model_name
 
 

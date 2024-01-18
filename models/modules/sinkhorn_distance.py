@@ -27,10 +27,8 @@ class SinkhornDistance(nn.Module):
     def forward(self, x, y):
         # The Sinkhorn algorithm takes as input three variables :
         C = self._cost_matrix(x, y)  # Wasserstein cost function
-        # print(x.size(), y.size(), C.shape)
         x_points = x.shape[-2]
         y_points = y.shape[-2]
-        # print(x.dim(), x_points, y_points)
         if x.dim() == 2:
             batch_size = 1
         else:
