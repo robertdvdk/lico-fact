@@ -76,8 +76,9 @@ class TextEncoder(nn.Module):
         # eot_token is the fullstop (end of text)
         # they want to condense the transformer features self.transformer(x) to a single vector and 
         # the eot token acts as a summarization vector of the whole input prompt's features
-        x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
-        return x
+        x = x[:, :16] @ self.text_projection
+        x_single_vec = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
+        return x, x_single_vec
 
 class PromptLearner(nn.Module):
     def __init__(self, classnames, clip_model):

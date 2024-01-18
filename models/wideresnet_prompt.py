@@ -137,7 +137,7 @@ class WideResNetPrompt(nn.Module):
             nn.Dropout(0.5),
             nn.ReLU(),
             nn.Linear(512, self.image_feature_dim)
-            )
+        )
 
         # self.up = nn.Upsample(scale_factor=2, mode='bilinear')
         self.fc_768to512 = nn.Linear(768, 512)
@@ -163,7 +163,7 @@ class WideResNetPrompt(nn.Module):
         emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp, norm = True)
 
         prompts = self.prompt_learner() # [100, 77, 512]
-        text_features = self.text_encoder(prompts, self.tokenized_prompts) # [100, 512]
+        text_features, text_features_single = self.text_encoder(prompts, self.tokenized_prompts) # [100, 512]
 
         if language and mode == 'train':
             out = self.fc(out)
@@ -171,18 +171,18 @@ class WideResNetPrompt(nn.Module):
             # prompt learning
             
             text_features_w = self.mlp(text_features)
-            text_features_w = text_features_w.view(text_features_w.shape[0], -1) # (100, 64)
+            text_features_w = text_features_w.view(-1, text_features_w.shape[-1]) # (100, 64)
             text_features_w = text_features_w.expand(feature_maps.shape[0], text_features_w.shape[0], text_features_w.shape[1])
             
             feature_maps = F.normalize(feature_maps, dim = 2)
             text_features_w = F.normalize(text_features_w, dim = 2)
-           
+            
             with torch.no_grad():
                 P, C = w_distance(feature_maps, text_features_w)
             w_loss = torch.sum(P * C, dim=(-2, -1)).mean()
 
             label_distribution, _ = sim_matrix_pre(
-                targets, text_features, self.emb_temp, token_fc = None, noise = False)
+                targets, text_features_single, self.emb_temp, token_fc = None, noise = False)
             return out, emb_matrix, emb, w_loss, label_distribution
         
         if mode == 'test':
