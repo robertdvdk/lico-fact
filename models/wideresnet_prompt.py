@@ -142,7 +142,7 @@ class WideResNetPrompt(nn.Module):
         # self.up = nn.Upsample(scale_factor=2, mode='bilinear')
         self.fc_768to512 = nn.Linear(768, 512)
 
-    def horrible_forward(self, x, language=True,
+    def forward(self, x, language=True,
         targets = None, 
         w_distance = None,
         mode = 'train'):
@@ -190,7 +190,7 @@ class WideResNetPrompt(nn.Module):
                 targets, text_features, self.emb_temp, token_fc = None, noise = False)
             return out, emb_matrix, emb, label_distribution
 
-    def forward(self, x):
+    def get_logits(self, x):
 
         out = self.conv1(x)
         out = self.block1(out)

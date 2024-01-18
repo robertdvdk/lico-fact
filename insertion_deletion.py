@@ -98,7 +98,7 @@ def insertion(images, saliency_maps, indices, targets, model, pixel_batch_size, 
         # get class probabilities
 
         with torch.no_grad():
-            logits = model(inputs)
+            logits = model.get_logits(inputs)
             cur_probs = torch.gather(torch.softmax(logits, dim=-1), 1, targets.unsqueeze(1))
             probs[:, i] = cur_probs.squeeze(1)
 
@@ -144,7 +144,7 @@ def deletion(images, saliency_maps, indices, targets, model, pixel_batch_size):
         
         with torch.no_grad():
             # get class probabilities
-            logits = model(inputs)
+            logits = model.get_logits(inputs)
             cur_probs = torch.gather(torch.softmax(logits, dim=-1), 1, targets.unsqueeze(1))
             probs[:, i] = cur_probs.squeeze(1)
 
@@ -202,7 +202,7 @@ for batch in testloader:
         feature_handle = target_layer.register_forward_hook(save_features)
         gradient_handle = target_layer.register_backward_hook(save_gradients)
 
-        output = model(x)
+        output = model.get_logits(x)
         feature_handle.remove()
 
         # 2. Get predicted class and compute gradients
@@ -230,7 +230,7 @@ for batch in testloader:
         forward_handle = target_layer.register_forward_hook(save_features)
         backward_handle = target_layer.register_backward_hook(save_gradients)
 
-        output = model(x)
+        output = model.get_logits(x)
         forward_handle.remove()
 
         _, predicted_classes = torch.max(output, dim=1)

@@ -41,7 +41,7 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
             # emb: unrolled feature maps, w_loss: OT loss
             # label_distribution: similarity matrix of the embedded prompts
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=True):
-                out, emb_matrix, emb, w_loss, label_distribution = net.horrible_forward(x, targets=y, w_distance=w_distance)
+                out, emb_matrix, emb, w_loss, label_distribution = net(x, targets=y, w_distance=w_distance)
 
                 # cross-entropy loss
                 ce_loss = CELoss(out, y)
