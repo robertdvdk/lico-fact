@@ -162,13 +162,15 @@ def main():
     dataset_statistics = {
         'cifar10': ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         'cifar100': ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
-        'imagenette': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        'imagenette_160': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        'imagenette_320': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     }
 
     dataset_image_sizes = {
         'cifar10': 32,
         'cifar100': 32,
-        'imagenette': 320
+        'imagenette_320': 320,
+        'imagenette_160': 160
     }
 
     try:
@@ -245,8 +247,9 @@ def main():
                       'maple', 'oak', 'palm', 'pine', 'willow',
                       'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train',
                       'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor')
-    elif args.train_dataset == "imagenette":
-        trainset_full = ImagenetteDataset(args.data_root + args.train_dataset, 320, 
+    elif args.train_dataset in ("imagenette_320", "imagenette_160"):
+        image_size = int(args.train_dataset.split("_")[-1])
+        trainset_full = ImagenetteDataset(args.data_root + args.train_dataset, image_size, 
                                           download=True, validation=False, transform=train_transform)
 
         num_train = len(trainset_full)
@@ -257,7 +260,7 @@ def main():
 
         valset.transforms = val_transform
 
-        testset = ImagenetteDataset(args.data_root + args.train_dataset, 320, 
+        testset = ImagenetteDataset(args.data_root + args.train_dataset, image_size, 
                                           download=True, validation=True, transform=val_transform)
 
         classnames = ("tench", "English springer", "cassette player", "chain saw", 
