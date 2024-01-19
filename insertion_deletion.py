@@ -34,7 +34,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # Build model (ResNet)
 wrn_builder = build_WideResNet(1, 10, 2, 0.01, 0.1, 0.5)
-model = wrn_builder.build(10) #["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
+model = wrn_builder.build(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
 model = model.to(device)
 
 test_transform = transforms.Compose([
@@ -58,7 +58,7 @@ model.eval()
 print("Successfully loaded model")
 
 
-def get_saliency_maps(images, method='random', generator=None, targets=None):
+def get_saliency_maps(images, method='random', generator=None, targets=None, target_layer=None):
     if method == 'random':
         # just do random saliency maps for now to test
         heatmap = torch.rand((images.shape[0], images.shape[2], images.shape[3]))
@@ -230,14 +230,20 @@ running_avg_auc_insertion = 0
 running_avg_auc_deletion = 0
 
 for batch in testloader:
-
     x, y = batch
     x, y = x.to(device), y.to(device)
 
     # get necessary prereqs for insertion and deletion scores
     target_layer = model.block3.layer[0].conv2
 
-    saliency_maps = get_saliency_maps(x, generator=generator, method='GradCAM')
+    saliency_maps = get_saliency_maps(x, generator=generator, method=args.saliency_method, targets=y, target_layer=target_layer)
+
+    # Convert the tensor to PIL Image and save
+    to_pil = transforms.ToPILImage()
+    img = to_pil(saliency_maps[0])
+    img.save('./outputs/{}_map_{}.png'.format(args.saliency_method, num_batches))
+    img = to_pil(x[0])
+    img.save('./outputs/{}_img_{}.png'.format(args.saliency_method, num_batches))
 
     B, H, W = saliency_maps.shape
     num_pixels = H*W
@@ -248,18 +254,15 @@ for batch in testloader:
     indices = torch.stack((indices // W, indices % W), dim=-1)
 
     # get insertion and deletion probs
-
     insertion_probs = insertion(x, saliency_maps, indices, y, model, 10, blur)
     deletion_probs = deletion(x, saliency_maps, indices, y, model, 10)
     
     # get the auc of insertion probs
-
     dx = 1/insertion_probs.shape[1]
     auc_insertion = torch.sum((insertion_probs[:, 1:] + insertion_probs[:, :-1]) * dx / 2, axis=1)
     cur_avg_auc_insertion = torch.mean(auc_insertion)
 
     # get the auc of deletion
-
     dx = 1/deletion_probs.shape[1]
     auc_deletion = torch.sum((deletion_probs[:, 1:] + deletion_probs[:, :-1]) * dx / 2, axis=1)
     cur_avg_auc_deletion = torch.mean(auc_deletion)
@@ -271,9 +274,8 @@ for batch in testloader:
 
     torch.cuda.empty_cache()
 
-    if num_batches == 10:
-
-        break
+    if num_batches == 1:
+       break
 
 
 avg_auc_insertion = running_avg_auc_insertion/num_batches
