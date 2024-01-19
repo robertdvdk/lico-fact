@@ -274,8 +274,8 @@ for batch in testloader:
 
     torch.cuda.empty_cache()
 
-    if num_batches == 1:
-       break
+    #if num_batches == 1:
+    #   break
 
 
 avg_auc_insertion = running_avg_auc_insertion/num_batches
