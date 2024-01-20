@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
-import wget
-import tarfile
+#import wget
+#import tarfile
 import torchvision
 from PIL import Image
 from torchvision import transforms
