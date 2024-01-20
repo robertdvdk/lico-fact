@@ -34,10 +34,11 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
 
         net.train()
         for batch in tqdm(trainloader):
+            
+            optimizer.zero_grad()
 
             x, y = batch
             x, y = x.to(device), y.to(device)
-
             # out: output logits, emb_matrix: similarity matrix of the feature maps
             # emb: unrolled feature maps, w_loss: OT loss
             # label_distribution: similarity matrix of the embedded prompts
@@ -57,7 +58,6 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-            optimizer.zero_grad()
             scheduler.step()
 
             running_loss += loss.item()

@@ -15,7 +15,7 @@ def sim_matrix_pre(labels, text_tensors, temp, token_fc, noise = False):
         batch_text_tensors = token_fc(batch_text_tensors)
     # temp = 1
     numerator = pdists(batch_text_tensors, squared = False, _type = 'euc', noise = noise)
-    matrix = F.softmax(numerator / temp, dim = 1)
+    matrix = F.softmax(-numerator / temp, dim = 1)
 
     return matrix, batch_text_tensors
 

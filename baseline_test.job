@@ -6,7 +6,7 @@
 #SBATCH --gpus=1
 #SBATCH --job-name=baseline_test
 #SBATCH --ntasks=1
-#SBATCH --time=02:30:00
+#SBATCH --time=00:30:00
 #SBATCH --mem=32000M
 #SBATCH --output=baseline_test.out
 
@@ -17,4 +17,4 @@ module load Anaconda3/2022.05
 # Activate your environment
 source activate dl2023
 # Run your code
-srun python -u train.py --num_epochs 200 --alpha 0 --beta 0 --save_model_name 200_epoch_0_alpha_0_beta_newcosscheduler_CIFAR10_withaugs.pt --lr 0.03 --weight_decay 5e-4
+srun python -u train.py --train_dataset cifar100 --save_model_name cifar100_baseline_wrn_28_2.pt --data_root ./data/ --alpha 0 --beta 0

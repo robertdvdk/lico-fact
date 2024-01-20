@@ -14,7 +14,7 @@ from .clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 import json
 
 from transformers import AlignTextModel, AlignProcessor, AlignModel
-
+import sys
 _tokenizer = _Tokenizer()
 
 
@@ -76,7 +76,9 @@ class TextEncoder(nn.Module):
         # eot_token is the fullstop (end of text)
         # they want to condense the transformer features self.transformer(x) to a single vector and 
         # the eot token acts as a summarization vector of the whole input prompt's features
-        x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
+        #x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
+        x = x[:, :16] @ self.text_projection
+
         return x
 
 class PromptLearner(nn.Module):

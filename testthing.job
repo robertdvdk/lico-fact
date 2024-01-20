@@ -17,4 +17,4 @@ module load Anaconda3/2022.05
 # Activate your environment
 source activate dl2023
 # Run your code
-srun python -u train.py
+srun python -u train.py --data_root ./data
