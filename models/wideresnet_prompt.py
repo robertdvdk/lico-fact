@@ -114,8 +114,8 @@ class WideResNetPrompt(nn.Module):
                 m.bias.data.zero_()
 
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
-        self.emb_temp = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
-
+        #self.emb_temp = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+        self.emb_temp = 1
         '''
         Prompt Learning
         '''
