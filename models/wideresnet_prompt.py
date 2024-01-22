@@ -224,11 +224,11 @@ class WideResNetPrompt(nn.Module):
     def euclidean_similarity(self, A, temp):
 
         # A is (B, 16, 512)
-
+        eps = 1e-4
         A = A.reshape(A.shape[0], -1)
 
         diff = A[:, None, :] - A[None, :, :]
-        dist_sq = torch.sum(diff ** 2, axis=-1) 
+        dist_sq = torch.sum(diff ** 2, axis=-1) + eps
         dist = torch.sqrt(dist_sq)    
 
         sim = F.softmax(-dist/temp, dim=1)

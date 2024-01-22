@@ -126,6 +126,7 @@ def main():
     parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for dataloader')
     parser.add_argument('--seed', type=int, default=42, help='Seed for the random number generator')
     parser.add_argument('--image_feature_dim', type=int, default=64, help='Feature dimension for image features of image encoder')
+    parser.add_argument('--start_from_checkpoint', type=str, default=None, help='Checkpoint to start from')
 
     args = parser.parse_args()
 
@@ -270,6 +271,11 @@ def main():
     wrn_builder = build_WideResNet(1, args.depth, args.width, 0.01, 0.1, 0.5, args=args)
     wrn = wrn_builder.build(classnames)
     wrn = wrn.to(device)
+
+    if args.start_from_checkpoint:
+        full_model_checkpoint_path = args.save_path + args.start_from_checkpoint
+        checkpoint = torch.load(full_model_checkpoint_path)
+        wrn.load_state_dict(checkpoint['model_state_dict'])
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
                                               shuffle=True, num_workers=args.num_workers)

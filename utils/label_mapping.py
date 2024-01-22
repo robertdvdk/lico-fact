@@ -23,6 +23,7 @@ def sim_matrix_pre(labels, text_tensors, temp, token_fc, noise = False):
 def pdists(A, squared = False, _type = 'euc', noise = False):
 
     A = F.normalize(A, dim = 1)
+    
     if noise == True:
         A = add_noise(A)
 

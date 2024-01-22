@@ -17,4 +17,9 @@ module load Anaconda3/2022.05
 # Activate your environment
 source activate dl2023
 # Run your code
-srun python -u train.py --save_model_name fixed_CIFAR10_full_data_seed42_no_LICO.pt --data_root ./data/ --alpha 0 --beta 0 --weight_decay 5e-4 --seed 42
+
+:'
+srun python -u train.py --save_model_name fixed_CIFAR10_full_data_seed50_no_LICO.pt --data_root ./data/ --alpha 0 --beta 0 --weight_decay 5e-4 --seed 50
+'
+
+srun python -u train.py --start_from_checkpoint fixed_CIFAR10_full_data_seed50_no_LICO.pt/fixed_CIFAR10_full_data_seed50_no_LICO.pt.pt --save_model_name fixed_CIFAR10_full_data_seed50_50_more_epochs_no_LICO.pt --data_root ./data/ --lr 0.006 --num_epochs 50 --alpha 0 --beta 0 --weight_decay 5e-4 --seed 50
