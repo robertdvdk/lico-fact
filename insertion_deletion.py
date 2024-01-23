@@ -75,7 +75,7 @@ def get_saliency_maps(images, method='random', generator=None, targets=None, tar
     elif method == 'GradCAM++':
         heatmap = apply_grad_cam_pp(model, target_layer, images)
     else:
-        heatmap = None
+        heatmap = torch.zeros((images.shape[0], images.shape[2], images.shape[3]))
     return heatmap
 
 
