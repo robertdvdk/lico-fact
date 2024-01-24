@@ -16,7 +16,7 @@ def apply_grad_cam_pp(model, target_layer, input_tensor):
     forward_handle = target_layer.register_forward_hook(save_features)
     backward_handle = target_layer.register_backward_hook(save_gradients)
 
-    output = model.get_logits(input_tensor)
+    output = model(input_tensor)
     forward_handle.remove()
 
     _, predicted_classes = torch.max(output, dim=1)

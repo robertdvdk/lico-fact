@@ -14,10 +14,13 @@ import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 from utils.RISE import *
 from PIL import Image
-from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
 from utils.misc import *
 from utils.GradCAM import apply_grad_cam
 from utils.GradCAM_pp import apply_grad_cam_pp
+from pytorch_grad_cam import GradCAM, HiResCAM, ScoreCAM, GradCAMPlusPlus, AblationCAM, XGradCAM, EigenCAM, FullGrad
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+from pytorch_grad_cam.utils.image import show_cam_on_image
+from torchvision.models import resnet50
 
 parser = argparse.ArgumentParser(description='Insertion deletion values')
 
@@ -58,7 +61,7 @@ model.eval()
 print("Successfully loaded model")
 
 
-def get_saliency_maps(images, method='random', generator=None, targets=None, target_layer=None):
+def get_saliency_maps(images, method='random', generator=None, targets=None, target_layers=None):
     if method == 'random':
         # just do random saliency maps for now to test
         heatmap = torch.rand((images.shape[0], images.shape[2], images.shape[3]))
@@ -70,10 +73,16 @@ def get_saliency_maps(images, method='random', generator=None, targets=None, tar
             y = targets[i]
             cur_saliency_map = generator.forward(x)[int(y), :, :]
             heatmap[i, ...] = cur_saliency_map.unsqueeze(0)
-    elif method == 'GradCAM':
-        heatmap = apply_grad_cam(model, target_layer, images)
-    elif method == 'GradCAM++':
-        heatmap = apply_grad_cam_pp(model, target_layer, images)
+    elif method == 'GradCAM' or method == 'GradCAM++' or method == 'ScoreCAM':
+        if method == 'GradCAM':
+            cam = GradCAM(model=model, target_layers=target_layers)
+        elif method == 'GradCAM++':
+            cam = GradCAMPlusPlus(model=model, target_layers=target_layers)
+        else:
+            cam = ScoreCAM(model=model, target_layers=target_layers)
+        targets = [ClassifierOutputTarget(item) for item in targets]
+        grayscale_cam = cam(input_tensor=images, targets=targets)
+        heatmap = torch.tensor(grayscale_cam)
     else:
         heatmap = torch.zeros((images.shape[0], images.shape[2], images.shape[3]))
     return heatmap
@@ -107,7 +116,7 @@ def insertion(images, saliency_maps, indices, targets, model, pixel_batch_size, 
         # get class probabilities
 
         with torch.no_grad():
-            logits = model.get_logits(inputs)
+            logits = model(inputs)
             cur_probs = torch.gather(torch.softmax(logits, dim=-1), 1, targets.unsqueeze(1))
             probs[:, i] = cur_probs.squeeze(1)
 
@@ -153,7 +162,7 @@ def deletion(images, saliency_maps, indices, targets, model, pixel_batch_size):
         
         with torch.no_grad():
             # get class probabilities
-            logits = model.get_logits(inputs)
+            logits = model(inputs)
             cur_probs = torch.gather(torch.softmax(logits, dim=-1), 1, targets.unsqueeze(1))
             probs[:, i] = cur_probs.squeeze(1)
 
@@ -233,17 +242,16 @@ for batch in testloader:
     x, y = batch
     x, y = x.to(device), y.to(device)
 
-    # get necessary prereqs for insertion and deletion scores
-    target_layer = model.block3.layer[0].conv2
+    target_layers = [model.block3.layer[0].conv2]
 
-    saliency_maps = get_saliency_maps(x, generator=generator, method=args.saliency_method, targets=y, target_layer=target_layer)
+    saliency_maps = get_saliency_maps(x, generator=generator, method=args.saliency_method, targets=y, target_layers=target_layers)
 
     # Convert the tensor to PIL Image and save
-    to_pil = transforms.ToPILImage()
-    img = to_pil(saliency_maps[0])
-    img.save('./outputs/{}_map_{}.png'.format(args.saliency_method, num_batches))
-    img = to_pil(x[0])
-    img.save('./outputs/{}_img_{}.png'.format(args.saliency_method, num_batches))
+    #to_pil = transforms.ToPILImage()
+    #img = to_pil(saliency_maps[0])
+    #img.save('./outputs/{}_map_{}.png'.format(args.saliency_method, num_batches))
+    #img = to_pil(x[0])
+    #img.save('./outputs/{}_img_{}.png'.format(args.saliency_method, num_batches))
 
     B, H, W = saliency_maps.shape
     num_pixels = H*W

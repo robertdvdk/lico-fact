@@ -16,7 +16,7 @@ def apply_grad_cam(model, target_layer, input_tensor):
     feature_handle = target_layer.register_forward_hook(save_features)
     gradient_handle = target_layer.register_backward_hook(save_gradients)
 
-    output = model.get_logits(input_tensor)
+    output = model(input_tensor)
     feature_handle.remove()
 
     # get feature map

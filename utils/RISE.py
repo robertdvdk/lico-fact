@@ -73,7 +73,7 @@ class RISE(nn.Module):
 
         for i in range(0, self.n_masks, self.n_batch):
             input = masked_x[i:min(i + self.n_batch, self.n_masks)].to(device)
-            out = self.model.get_logits(input)
+            out = self.model(input)
             probs.append(torch.softmax(out, dim=1).to('cpu').data)
 
         probs = torch.cat(probs)    # shape => (n_masks, n_classes)
