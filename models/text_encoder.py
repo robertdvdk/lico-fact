@@ -2,11 +2,12 @@ import os
 import torch
 import torch.nn as nn
 
-from .clip import clip
-from .clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
+from clip import clip
+from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 
 _tokenizer = _Tokenizer()
 
+# This is mostly copied from the CoOp repo: https://github.com/KaiyangZhou/CoOp/blob/main/trainers/coop.py.
 def load_clip_to_cpu():
     backbone_name = "ViT-B/32"
     url = clip._MODELS[backbone_name]
@@ -41,15 +42,24 @@ class TextEncoder(nn.Module):
         x = x.permute(1, 0, 2)  # LND -> NLD
         x = self.ln_final(x).type(self.dtype)
 
-        # x.shape = [batch_size, n_ctx, transformer.width]
-        # take features from the eot embedding (eot_token is the highest number in each sequence)
-        # eot_token is the fullstop (end of text)
-        # they want to condense the transformer features self.transformer(x) to a single vector and 
-        # the eot token acts as a summarization vector of the whole input prompt's features
+        """
+        In the original repo, they used commented line below:
+        x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
 
-
-        # x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
-        x = x[torch.arange(x.shape[0]), :16] @ self.text_projection
+        This is the same as in the CoOp repo, but this does not agree with the paper.
+        The paper says that each G_i should be a matrix of (M, d), where M is the prompt length and d is the
+        dimensionality of clip embeddings. In the CoOp repo, after the line below, x is just a vector of length d.
+        So we change it to match the paper.
+        """
+        # Take the class with the largest prompt length (e.g. the class "aquarium fish" is multiple tokens, whereas
+        # "zebra" is just one token). To make sure we include every token in every prompt, we take the class with the
+        # largest prompt length.
+        prompt_length = tokenized_prompts.argmax(dim=-1)
+        max_prompt_length = prompt_length.max().item()
+        x = x[:, :max_prompt_length] @ self.text_projection
+        # Now x is (num_classes, prompt_length, 512). Later, for each sample in a batch, we will select the
+        # corresponding x[i] based on the class label of that sample. This will give us a matrix of shape
+        # (prompt_length, 512) for each sample, which is what we want.
         return x
 
 class PromptLearner(nn.Module):
@@ -59,7 +69,6 @@ class PromptLearner(nn.Module):
         n_ctx = 12
         dtype = clip_model.dtype
         ctx_dim = clip_model.ln_final.weight.shape[0]
-        self.N = 1
 
         # random initialization of context
         print("Initializing class-specific contexts")
@@ -79,8 +88,6 @@ class PromptLearner(nn.Module):
         # Tokenized prompts are whole sentences like "XXXXXXXX <label>."
         # Here they are turned to clip vocabulary tokens
         tokenized_prompts = torch.cat([clip.tokenize(p) for p in prompts])  # (num_classes, 77)
-        # This adds an extra dimension of N, repeating tokenized_prompts along it
-        tokenized_prompts = tokenized_prompts.repeat(self.N, 1)
 
         with torch.no_grad():
             # Embedded vectors of tokenized_prompts
@@ -117,7 +124,7 @@ class PromptLearner(nn.Module):
         if ctx.dim() == 3:
             ctx = ctx.unsqueeze(0)
 
-        ctx = ctx.contiguous().view(self.N*self.n_cls,self.n_ctx,ctx.shape[3])
+        ctx = ctx.contiguous().view(self.n_cls,self.n_ctx,ctx.shape[3])
         prefix = self.token_prefix
         suffix = self.token_suffix
         ctx = self._ctx_shuffle(ctx)

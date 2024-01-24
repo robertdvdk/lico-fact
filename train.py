@@ -13,7 +13,6 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import json
 
-
 def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_distance, num_epochs, device, writer,
           full_model_save_path, save_model_name):
     scaler = torch.cuda.amp.GradScaler(enabled=True)
@@ -107,7 +106,6 @@ def main():
 
     parser.add_argument('--lr', type=float, default=0.03, help='Learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
-    parser.add_argument('--weight_decay', type=float, default=0.0001, help='Weight decay parameter')
     parser.add_argument('--num_epochs', type=int, default=200, help='Number of epochs')
     parser.add_argument('--alpha', type=float, default=10, help='Weight of manifold loss')
     parser.add_argument('--beta', type=float, default=1, help='Weight of OT loss')
@@ -115,7 +113,7 @@ def main():
     parser.add_argument('--val_prop', type=float, default=0.05, help='Proportion of train data to use for validation')
     parser.add_argument('--sinkhorn_eps', type=float, default=0.1, help='Default eps to use for sinkhorn algorithm')
     parser.add_argument('--sinkhorn_max_iters', type=int, default=1000, help='Max iterations for sinkhorn algorithm')
-    parser.add_argument('--train_dataset', type=str, default='cifar10', help='Which dataset to train on')
+    parser.add_argument('--train_dataset', type=str, default='cifar100', help='Which dataset to train on')
     parser.add_argument('--save_path', type=str, default='./trained_models/', help='Path to save trained models')
     parser.add_argument('--save_model_name', type=str, default='wrn28-2', help='Model name to save')
     parser.add_argument('--depth', type=int, default=28, help='WideResNet depth')
@@ -123,6 +121,7 @@ def main():
     parser.add_argument('--data_root', type=str, default='../../data/', help='Path to data')
     parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for dataloader')
     parser.add_argument('--seed', type=int, default=42, help='Seed for the random number generator')
+    parser.add_argument('--weight_decay', type=float, default=0.0001, help='Weight decay')
 
     args = parser.parse_args()
 
@@ -199,25 +198,23 @@ def main():
 
 
 
-        classnames = ('plane', 'car', 'bird', 'cat',
-               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+        classnames = sorted(['plane', 'car', 'bird', 'cat',
+               'deer', 'dog', 'frog', 'horse', 'ship', 'truck'])
 
     elif args.train_dataset == 'cifar100':
         trainset_full = torchvision.datasets.CIFAR100(root=args.data_root + args.train_dataset, train=True,
                                                      download=True, transform=train_transform)
-
         num_train = len(trainset_full)
         num_val = int(num_train * args.val_prop)
         num_train = num_train - num_val
 
         trainset, valset = torch.utils.data.random_split(trainset_full, [num_train, num_val])
-
         valset.transforms = val_transform
 
         testset = torchvision.datasets.CIFAR100(root=args.data_root + args.train_dataset, train=False,
                                                download=True, transform=val_transform)
 
-        classnames = ('beaver', 'dolphin', 'otter', 'seal', 'whale',
+        classnames = sorted(['beaver', 'dolphin', 'otter', 'seal', 'whale',
                       'aquarium fish', 'flatfish', 'ray', 'shark', 'trout',
                       'orchids', 'poppies', 'roses', 'sunflowers', 'tulips',
                       'bottles', 'bowls', 'cans', 'cups', 'plates',
@@ -236,10 +233,9 @@ def main():
                       'hamster', 'mouse', 'rabbit', 'shrew', 'squirrel',
                       'maple', 'oak', 'palm', 'pine', 'willow',
                       'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train',
-                      'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor')
+                      'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor'])
 
-
-    wrn_builder = build_WideResNet(1, args.depth, args.width, 0.01, 0.1, 0.5)
+    wrn_builder = build_WideResNet(args.depth, args.width, 0.5)
     wrn = wrn_builder.build(classnames)
     wrn = wrn.to(device)
 
