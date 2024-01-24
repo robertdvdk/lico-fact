@@ -73,13 +73,9 @@ class TextEncoder(nn.Module):
         print(x.shape)
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
-<<<<<<< HEAD
-
-=======
         # eot_token is the fullstop (end of text)
         # they want to condense the transformer features self.transformer(x) to a single vector and 
         # the eot token acts as a summarization vector of the whole input prompt's features
->>>>>>> df9f256030f03d4a521c66e8360a208cd7ffea7b
         x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
         print(x.shape)
         return x

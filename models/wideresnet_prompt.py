@@ -76,12 +76,13 @@ class NetworkBlock(nn.Module):
 
 
 class WideResNetPrompt(nn.Module):
-    def __init__(self, first_stride, num_classes, depth=28, widen_factor=2, drop_rate=0.0, is_remix=False, args = None):
+    def __init__(self, first_stride, classnames, depth=28, widen_factor=2, drop_rate=0.0, is_remix=False, args = None):
         super(WideResNetPrompt, self).__init__()
         channels = [16, 16 * widen_factor, 32 * widen_factor, 64 * widen_factor]
         assert ((depth - 4) % 6 == 0)
         n = (depth - 4) / 6
         block = BasicBlock
+        self.image_feature_dim = 64 if args is None else args.image_feature_dim
         # 1st conv before any network block
         self.conv1 = nn.Conv2d(3, channels[0], kernel_size=3, stride=1,
                                padding=1, bias=True)
@@ -97,7 +98,7 @@ class WideResNetPrompt(nn.Module):
         # global average pooling and classifier
         self.bn1 = nn.BatchNorm2d(channels[3], momentum=0.001, eps=0.001)
         self.relu = nn.LeakyReLU(negative_slope=0.1, inplace=False)
-        self.fc = nn.Linear(channels[3], num_classes)
+        self.fc = nn.Linear(channels[3], len(classnames))
         self.channels = channels[3]
 
 
@@ -118,9 +119,6 @@ class WideResNetPrompt(nn.Module):
         '''
         Prompt Learning
         '''
-        classnames = ['plane', 'car', 'automobile', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-        # classnames = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
-
         # Text encoder
         self.clip_model = load_clip_to_cpu()
         self.text_encoder = TextEncoder(self.clip_model)
@@ -138,13 +136,13 @@ class WideResNetPrompt(nn.Module):
             nn.Linear(512, 512),
             nn.Dropout(0.5),
             nn.ReLU(),
-            nn.Linear(512, 64)
+            nn.Linear(512, self.image_feature_dim)
             )
 
         # self.up = nn.Upsample(scale_factor=2, mode='bilinear')
         self.fc_768to512 = nn.Linear(768, 512)
 
-    def forward(self, x, language=True, 
+    def forward_with_distances(self, x, language=True,
         targets = None, 
         w_distance = None,
         mode = 'train'):
@@ -163,14 +161,10 @@ class WideResNetPrompt(nn.Module):
 
         emb_temp = self.emb_temp
         emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp, norm = True)
-        
 
-        text_features = []
         prompts = self.prompt_learner() # [100, 77, 512]
         text_features = self.text_encoder(prompts, self.tokenized_prompts) # [100, 512]
 
-
-        
         if language and mode == 'train':
             out = self.fc(out)
 
@@ -182,6 +176,7 @@ class WideResNetPrompt(nn.Module):
             
             feature_maps = F.normalize(feature_maps, dim = 2)
             text_features_w = F.normalize(text_features_w, dim = 2)
+           
             with torch.no_grad():
                 P, C = w_distance(feature_maps, text_features_w)
             w_loss = torch.sum(P * C, dim=(-2, -1)).mean()
@@ -195,8 +190,8 @@ class WideResNetPrompt(nn.Module):
             label_distribution, _ = sim_matrix_pre(
                 targets, text_features, self.emb_temp, token_fc = None, noise = False)
             return out, emb_matrix, emb, label_distribution
-        
-    def get_logits(self, x):
+
+    def forward(self, x):
 
         out = self.conv1(x)
         out = self.block1(out)
@@ -265,7 +260,7 @@ class WideResNetPrompt(nn.Module):
 
 class build_WideResNet:
     def __init__(self, first_stride=1, depth=28, widen_factor=2, bn_momentum=0.01, leaky_slope=0.0, dropRate=0.0,
-                 use_embed=False, is_remix=False):
+                 use_embed=False, is_remix=False, args=None):
         self.first_stride = first_stride
         self.depth = depth
         self.widen_factor = widen_factor
@@ -274,15 +269,17 @@ class build_WideResNet:
         self.leaky_slope = leaky_slope
         self.use_embed = use_embed
         self.is_remix = is_remix
+        self.args = args
 
-    def build(self, num_classes):
+    def build(self, classnames):
         return WideResNetPrompt(
             first_stride=self.first_stride,
             depth=self.depth,
-            num_classes=num_classes,
+            classnames=classnames,
             widen_factor=self.widen_factor,
             drop_rate=self.dropRate,
             is_remix=self.is_remix,
+            args=self.args
         )
 
 

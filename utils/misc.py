@@ -20,7 +20,7 @@ def get_accuracy(model, test_loader, device):
             inputs, labels = inputs.to(device), labels.to(device)
 
             # Forward pass
-            outputs, _, _, _ = model(inputs, targets=labels, mode='test')
+            outputs, _, _, _ = model.forward_with_distances(inputs, targets=labels, mode='test')
 
             # Get the predicted class with the highest score
             _, predicted = torch.max(outputs.data, 1)
@@ -33,14 +33,13 @@ def get_accuracy(model, test_loader, device):
     accuracy = 100 * correct / total
     return accuracy
 
-def get_loss(model, dataloader, args, device):
+def get_loss(model, dataloader, device, w_distance, alpha, beta):
 
     # get avg loss for given dataloader, use for e.g. validation loss
 
     model.eval()
 
     CELoss = nn.CrossEntropyLoss()
-    w_distance = SinkhornDistance(args.sinkhorn_eps, args.sinkhorn_max_iters)
 
     running_loss = 0
     num_batches = 0
@@ -56,7 +55,7 @@ def get_loss(model, dataloader, args, device):
             # emb: unrolled feature maps, w_loss: OT loss
             # label_distribution: similarity matrix of the embedded prompts
 
-            out, emb_matrix, emb, w_loss, label_distribution = model(x, targets=y, w_distance=w_distance)
+            out, emb_matrix, emb, w_loss, label_distribution = model.forward_with_distances(x, targets=y, w_distance=w_distance)
 
             # cross-entropy loss
             ce_loss = CELoss(out, y)
@@ -66,7 +65,7 @@ def get_loss(model, dataloader, args, device):
 
             # get the full loss
 
-            loss = ce_loss + args.alpha*m_loss + args.beta*w_loss
+            loss = ce_loss + alpha*m_loss + beta*w_loss
 
             running_loss += loss.item()
             num_batches += 1
