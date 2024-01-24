@@ -130,7 +130,7 @@ class WideResNetPrompt(nn.Module):
         # Calculate similarity matrix as the softmax of negative distances. Equation (1) in the paper.
         softmax_temp = self.softmax_temp
         image_distance_matrix = euclidean_distance(emb)
-        AF = F.softmax(-image_distance_matrix / softmax_temp, dim=0)
+        AF = F.softmax(-image_distance_matrix / softmax_temp, dim=1)
         # Note: AF stands for A^F in the paper. This is the similarity matrix of the feature maps.
 
         prompts = self.prompt_learner()  # (num_classes, 77, 512)
@@ -149,13 +149,13 @@ class WideResNetPrompt(nn.Module):
             w_loss = torch.sum(P * C, dim=(-2, -1)).mean()
 
             text_distance_matrix = euclidean_distance(text_features)
-            AG = F.softmax(-text_distance_matrix / softmax_temp, dim=0)
+            AG = F.softmax(-text_distance_matrix / softmax_temp, dim=1)
             # Note: AG stands for A^G in the paper. This is the similarity matrix of the embedded prompts.
             return out, AF, w_loss, AG
         
         elif mode == 'test':
             text_distance_matrix = euclidean_distance(text_features)
-            AG = F.softmax(-text_distance_matrix / softmax_temp, dim=0)
+            AG = F.softmax(-text_distance_matrix / softmax_temp, dim=1)
             return out, AF, AG
         
     def get_logits(self, x):
