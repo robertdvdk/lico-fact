@@ -15,12 +15,8 @@ import torchvision.utils as vutils
 from utils.RISE import *
 from PIL import Image
 from utils.misc import *
-from utils.GradCAM import apply_grad_cam
-from utils.GradCAM_pp import apply_grad_cam_pp
-from pytorch_grad_cam import GradCAM, HiResCAM, ScoreCAM, GradCAMPlusPlus, AblationCAM, XGradCAM, EigenCAM, FullGrad
+from pytorch_grad_cam import GradCAM, ScoreCAM, GradCAMPlusPlus
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-from pytorch_grad_cam.utils.image import show_cam_on_image
-from torchvision.models import resnet50
 
 parser = argparse.ArgumentParser(description='Insertion deletion values')
 
@@ -37,6 +33,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # Build model (ResNet)
 wrn_builder = build_WideResNet(1, 10, 2, 0.01, 0.1, 0.5)
+# TBA - fix these classes being hardcoded
 model = wrn_builder.build(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
 model = model.to(device)
 
