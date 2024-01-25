@@ -163,7 +163,7 @@ class WideResNetPrompt(nn.Module):
         emb_matrix = self._emb_SimMatrix(emb, temp = emb_temp, norm = True)
 
         prompts = self.prompt_learner() # [100, 77, 512]
-        text_features = self.text_encoder(prompts, self.tokenized_prompts) # [10, 16, 512]
+        text_features, text_features_single = self.text_encoder(prompts, self.tokenized_prompts) # [10, 16, 512]
 
         if language and mode == 'train':
             out = self.fc(out)
@@ -179,7 +179,8 @@ class WideResNetPrompt(nn.Module):
             w_loss = torch.sum(P * C, dim=(-2, -1)).mean()
 
             #label_distribution = self.euclidean_similarity(text_features[targets, :, :], emb_temp)
-            label_distribution = self.euclidean_similarity(text_features_w, emb_temp)
+            label_distribution, _ = sim_matrix_pre(
+                targets, text_features_single, self.emb_temp, token_fc = None, noise = False)
 
             return out, emb_matrix, emb, w_loss, label_distribution
         
