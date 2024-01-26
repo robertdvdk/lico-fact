@@ -1,11 +1,8 @@
-import torch
-import torch.nn as nn
 from torch.optim import SGD
 import torchvision
 import torchvision.transforms as transforms
 from models.wideresnet_prompt import *
 from models.modules.sinkhorn_distance import SinkhornDistance
-from torch.optim.lr_scheduler import CosineAnnealingLR
 from utils.misc import *
 import argparse
 import os
@@ -41,7 +38,6 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
             # label_distribution: similarity matrix of the embedded prompts
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=True):
                 out, AF, w_loss, AG = net(x, targets=y, w_distance=w_distance)
-
                 # cross-entropy loss
                 ce_loss = CELoss(out, y)
 
@@ -74,6 +70,7 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
         writer.add_scalar('Average manifold loss', round(avg_m_loss, 3), epoch)
         writer.add_scalar('Average OT loss', round(avg_OT_loss, 3), epoch)
         writer.add_scalar('Average CE loss', round(avg_CE_loss, 3), epoch)
+        writer.add_scalar('Softmax temperature', round(net.softmax_temp.item(), 3), epoch)
 
         test_acc = get_accuracy(net, valloader, device)
         writer.add_scalar('Validation accuracy', round(test_acc, 3), epoch)
@@ -122,6 +119,8 @@ def main():
     parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for dataloader')
     parser.add_argument('--seed', type=int, default=42, help='Seed for the random number generator')
     parser.add_argument('--weight_decay', type=float, default=0.0001, help='Weight decay')
+    parser.add_argument('--fixed_temperature', default=False, action='store_true',
+                        help="Whether to use a fixed softmax temperature")
 
     args = parser.parse_args()
 
@@ -235,7 +234,7 @@ def main():
                       'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train',
                       'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor'])
 
-    wrn_builder = build_WideResNet(args.depth, args.width, 0.5)
+    wrn_builder = build_WideResNet(args.depth, args.width, 0.5, args.fixed_temperature)
     wrn = wrn_builder.build(classnames)
     wrn = wrn.to(device)
 
@@ -254,7 +253,13 @@ def main():
 
     w_distance = SinkhornDistance(args.sinkhorn_eps, args.sinkhorn_max_iters)
 
-    optimizer = SGD(wrn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    # Freeze the clip model
+    for name, param in wrn.named_parameters():
+        if name.startswith('clip'):
+            param.requires_grad = False
+
+
+    optimizer = SGD(filter(lambda p: p.requires_grad, wrn.parameters()), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = CosineAnnealingStepLR(optimizer, T_max=num_steps)
 
     train(wrn, trainloader, valloader, optimizer, scheduler, args.alpha, args.beta, w_distance, num_epochs, device,

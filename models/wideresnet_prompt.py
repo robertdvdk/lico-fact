@@ -57,7 +57,7 @@ class NetworkBlock(nn.Module):
 
 
 class WideResNetPrompt(nn.Module):
-    def __init__(self, classnames, depth=28, widen_factor=2, drop_rate=0.0):
+    def __init__(self, classnames, depth=28, widen_factor=2, drop_rate=0.0, fixed_temperature=False):
         super(WideResNetPrompt, self).__init__()
         channels = [16, 16 * widen_factor, 32 * widen_factor, 64 * widen_factor]
         assert ((depth - 4) % 6 == 0)
@@ -94,7 +94,10 @@ class WideResNetPrompt(nn.Module):
 
         # This is a learned parameter, as noted just after Equation (1). We initialise it to log(1/0.07) as this is
         # the value used in the CLIP paper.
-        self.softmax_temp = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+        if not fixed_temperature:
+            self.softmax_temp = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+        else:
+            self.softmax_temp = torch.ones([]) * np.log(1 / 0.07)
 
         '''
         Prompt Learning
@@ -175,10 +178,11 @@ class WideResNetPrompt(nn.Module):
         return out
 
 class build_WideResNet:
-    def __init__(self, depth=28, widen_factor=2, drop_rate=0.0):
+    def __init__(self, depth=28, widen_factor=2, drop_rate=0.0, fixed_temperature=False):
         self.depth = depth
         self.widen_factor = widen_factor
         self.drop_rate = drop_rate
+        self.fixed_temperature=fixed_temperature
 
     def build(self, classnames):
         return WideResNetPrompt(
@@ -186,6 +190,7 @@ class build_WideResNet:
             classnames=classnames,
             widen_factor=self.widen_factor,
             drop_rate=self.drop_rate,
+            fixed_temperature=self.fixed_temperature
         )
 
 

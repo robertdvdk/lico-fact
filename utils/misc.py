@@ -3,8 +3,9 @@ import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler
 import math
 
-def calculate_manifold_loss(A, B):
-    return torch.mean(torch.sum(A*torch.log(A/B), dim=1))
+def calculate_manifold_loss(A, B, eps=0.0001):
+    # Add small eps for numerical stability (avoid log(0) and log(inf)).
+    return torch.mean(torch.sum(A*torch.log((A + eps)/ (B+eps)), dim=1))
 
 
 def get_accuracy(model, test_loader, device):
