@@ -102,7 +102,7 @@ class PromptLearner(nn.Module):
             prompt_prefix = ctx_init
         else:
             # random initialization
-            if True:
+            if False:
                 print("Initializing class-specific contexts")
                 ctx_vectors = torch.empty(n_cls, n_ctx, ctx_dim, dtype=dtype)
             else:
@@ -160,7 +160,7 @@ class PromptLearner(nn.Module):
         
         ctx = self.ctx
         if ctx.dim() == 3:
-            ctx = ctx.unsqueeze(0)
+            ctx = ctx.unsqueeze(1).expand(-1, self.n_cls, -1, -1)
 
         ctx = ctx.contiguous().view(self.N*self.n_cls,self.n_ctx,ctx.shape[3])
 
@@ -174,12 +174,11 @@ class PromptLearner(nn.Module):
             prompts = torch.cat(
                 [
                     prefix,  # (n_cls, 1, dim)
-                    ctx,     # (n_cls, n_ctx, dim)
+                    ctx,   # (n_cls, n_ctx, dim)
                     suffix,  # (n_cls, *, dim)
                 ],
                 dim=1,
             )
-
         elif self.class_token_position == "middle":
             half_n_ctx = self.n_ctx // 2
             prompts = []
@@ -222,7 +221,6 @@ class PromptLearner(nn.Module):
                 )
                 prompts.append(prompt)
             prompts = torch.cat(prompts, dim=0)
-
         else:
             raise ValueError
         return prompts
