@@ -268,7 +268,7 @@ def main():
                       "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute")
 
 
-    wrn_builder = build_WideResNet(1, args.depth, args.width, 0.01, 0.1, 0.5, args=args)
+    wrn_builder = build_WideResNet(1, args.depth, args.width, 0.01, 0.1, 0.0, args=args)
     wrn = wrn_builder.build(classnames)
     wrn = wrn.to(device)
 
