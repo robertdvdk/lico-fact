@@ -26,35 +26,66 @@ parser.add_argument('--batch_size', type=int, default=64, help='Testing batch si
 parser.add_argument('--pixel_batch_size', type=int, default=10, help='Number of pixels to insert/delete at a time')
 parser.add_argument('--sigma', type=float, default=5., help='Sigma of GaussianBlur')
 parser.add_argument('--saliency_method', type=str, default='RISE', help='Which method to use to obtain saliency maps')
-
+parser.add_argument('--depth', type=int, default=28, help='WRN depth')
+parser.add_argument('--width', type=int, default=2, help='WRN width')
 args = parser.parse_args()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# Build model (ResNet)
-wrn_builder = build_WideResNet(1, 10, 2, 0.01, 0.1, 0.5)
-# TBA - fix these classes being hardcoded
-model = wrn_builder.build(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
-model = model.to(device)
-
-test_transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
 
 # Prepare dataset
 if args.test_dataset == 'CIFAR10':
+
+    test_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    ])
     testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=test_transform)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+elif args.test_dataset == 'CIFAR100':
+
+    test_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+    ])
+    testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=test_transform)
+    classes = sorted(['beaver', 'dolphin', 'otter', 'seal', 'whale',
+                      'aquarium fish', 'flatfish', 'ray', 'shark', 'trout',
+                      'orchids', 'poppies', 'roses', 'sunflowers', 'tulips',
+                      'bottles', 'bowls', 'cans', 'cups', 'plates',
+                      'apples', 'mushrooms', 'oranges', 'pears', 'sweet peppers',
+                      'clock', 'computer keyboard', 'lamp', 'telephone', 'television',
+                      'bed', 'chair', 'couch', 'table', 'wardrobe',
+                      'bee', 'beetle', 'butterfly', 'caterpillar', 'cockroach',
+                      'bear', 'leopard', 'lion', 'tiger', 'wolf',
+                      'bridge', 'castle', 'house', 'road', 'skyscraper',
+                      'cloud', 'forest', 'mountain', 'plain', 'sea',
+                      'camel', 'cattle', 'chimpanzee', 'elephant', 'kangaroo',
+                      'fox', 'porcupine', 'possum', 'raccoon', 'skunk',
+                      'crab', 'lobster', 'snail', 'spider', 'worm',
+                      'baby', 'boy', 'girl', 'man', 'woman',
+                      'crocodile', 'dinosaur', 'lizard', 'snake', 'turtle',
+                      'hamster', 'mouse', 'rabbit', 'shrew', 'squirrel',
+                      'maple', 'oak', 'palm', 'pine', 'willow',
+                      'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train',
+                      'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor'])
 else:
     print("Invalid training dataset chosen")
     sys.exit()
 
 testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+
+wrn_builder = build_WideResNet(args.depth, args.width, 0.5)
+wrn = wrn_builder.build(classes)
+model = wrn.to(device)
     
 # load the model
+
 model.load_state_dict(torch.load(args.model_path, map_location=device))
+
 model.eval()
+
 print("Successfully loaded model")
 
 
@@ -279,8 +310,7 @@ for batch in testloader:
 
     torch.cuda.empty_cache()
 
-    #if num_batches == 1:
-    #   break
+    print(num_batches)
 
 
 avg_auc_insertion = running_avg_auc_insertion/num_batches

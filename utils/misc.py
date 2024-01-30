@@ -20,7 +20,7 @@ def get_accuracy(model, test_loader, device):
             inputs, labels = inputs.to(device), labels.to(device)
 
             # Forward pass
-            outputs, _, _, _ = model.forward_with_distances(inputs, targets=labels, mode='test')
+            outputs, _, _ = model.forward_with_distances(inputs, targets=labels, mode='test')
 
             # Get the predicted class with the highest score
             _, predicted = torch.max(outputs.data, 1)
