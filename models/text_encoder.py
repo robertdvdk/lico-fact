@@ -14,7 +14,7 @@ from .clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 import json
 
 from transformers import AlignTextModel, AlignProcessor, AlignModel
-import sys
+
 _tokenizer = _Tokenizer()
 
 
@@ -70,6 +70,7 @@ class TextEncoder(nn.Module):
         x = self.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
         x = self.ln_final(x).type(self.dtype)
+
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
         # eot_token is the fullstop (end of text)
