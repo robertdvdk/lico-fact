@@ -38,13 +38,13 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
             # emb: unrolled feature maps, w_loss: OT loss
             # label_distribution: similarity matrix of the embedded prompts
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=True):
-                out, emb_matrix, emb, w_loss, label_distribution = net(x, targets=y, w_distance=w_distance)
+                out, AF, w_loss, AG = net(x, targets=y, w_distance=w_distance)
 
                 # cross-entropy loss
                 ce_loss = CELoss(out, y)
 
                 # manifold loss
-                m_loss = calculate_manifold_loss(label_distribution, emb_matrix)
+                m_loss = calculate_manifold_loss(AG, AF)
 
                 # get the full loss
                 loss = ce_loss + alpha * m_loss + beta * w_loss
@@ -95,14 +95,6 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
 def main():
     parser = argparse.ArgumentParser(description='Train LICO')
 
-    '''
-    parser.add_argument('--model', type=str, default='ViT-B/32', help='Pre-trained CLIP model')
-    parser.add_argument('--device', type=str, default='cuda', help='Device to use (cuda or cpu)')
-    parser.add_argument('--image_dim', type=int, default=512, help='Dimension of the image encoder')
-    parser.add_argument('--hidden_dim', type=int, default=256, help='Dimension of the classification head')
-    parser.add_argument('--save_path', type=str, default='fine_tuned_clip.pt', help='Path to save the fine-tuned model')
-    '''
-
     parser.add_argument('--lr', type=float, default=0.03, help='Learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--weight_decay', type=float, default=0.0001, help='Weight decay parameter')
@@ -121,8 +113,8 @@ def main():
     parser.add_argument('--data_root', type=str, default='../../data/', help='Path to data')
     parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for dataloader')
     parser.add_argument('--seed', type=int, default=42, help='Seed for the random number generator')
-    parser.add_argument('--image_feature_dim', type=int, default=64,
-                        help='Feature dimension for image features of image encoder')
+    parser.add_argument('--fixed_temperature', default=False, action='store_true',
+                        help="Whether to use a fixed softmax temperature")
 
     args = parser.parse_args()
 
@@ -136,8 +128,11 @@ def main():
     writer.add_text('Beta', str(args.beta))
     writer.add_text('Batch size', str(args.batch_size))
 
+    if args.save_path[-1] != '/':
+        args.save_path += '/'
     full_model_save_path = args.save_path + args.save_model_name
 
+    # Ensure the training is reproducible
     def set_seed(seed):
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -253,8 +248,8 @@ def main():
         testset = ImagenetteDataset(args.data_root + args.train_dataset, image_size,
                                     download=True, validation=True, transform=val_transform)
 
-        classnames = sorted(["tench", "English springer", "cassette player", "chain saw",
-                      "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute"])
+        classnames = ("tench", "English springer", "cassette player", "chain saw",
+                      "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute")
 
 
 
@@ -276,7 +271,13 @@ def main():
 
     w_distance = SinkhornDistance(args.sinkhorn_eps, args.sinkhorn_max_iters)
 
-    optimizer = SGD(wrn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    # Freeze the clip model
+    for name, param in wrn.named_parameters():
+        if name.startswith('clip'):
+            param.requires_grad = False
+
+    optimizer = SGD(filter(lambda p: p.requires_grad, wrn.parameters()), lr=args.lr, momentum=args.momentum,
+                    weight_decay=args.weight_decay)
     scheduler = CosineAnnealingStepLR(optimizer, T_max=num_steps)
 
     train(wrn, trainloader, valloader, optimizer, scheduler, args.alpha, args.beta, w_distance, num_epochs, device,

@@ -106,7 +106,7 @@ class WideResNetPrompt(nn.Module):
             nn.Linear(512, 64)
         )
 
-    def forward_with_distances(self, x, language=True, targets=None, w_distance=None, mode='train'):
+    def forward(self, x, targets=None, w_distance=None, mode='train'):
         out = self.conv1(x)
         out = self.block1(out)
         out = self.block2(out)
@@ -130,11 +130,9 @@ class WideResNetPrompt(nn.Module):
         # Note: prompt_length here is <BOS> + n_ctx + (tokens for class: "aquarium fish" is 2 tokens) + '.' + <EOS>
         text_features = text_features[targets]  # (batch_size, prompt_length, 512)
 
-        if language and mode == 'train':
+        if mode == 'train':
             # prompt learning
             text_features_w = self.mlp(text_features)  # (batch_size, prompt_length, 64). This is G_i in the paper.
-
-            # This is from the LICO repo. We leave this as is (why?).
             feature_maps = F.normalize(feature_maps, dim=-1)  # (batch_size, num_channels, 64)
             text_features_w = F.normalize(text_features_w, dim=-1)  # (batch_size, num_context, 64)
             P, C = w_distance(feature_maps, text_features_w)
@@ -150,7 +148,7 @@ class WideResNetPrompt(nn.Module):
             AG = F.softmax(-text_distance_matrix / softmax_temp, dim=1)
             return out, AF, AG
 
-    def forward(self, x):
+    def logits(self, x):
 
         out = self.conv1(x)
         out = self.block1(out)

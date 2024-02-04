@@ -116,7 +116,7 @@ class PromptLearner(nn.Module):
         prefix = self.token_prefix
         suffix = self.token_suffix
 
-        ctx = self._ctx_shuffle(prefix, suffix, ctx)
+        ctx = self._ctx_shuffle(ctx)
 
         # This if is about different ordering of the prefix, ctx and suffix
         half_n_ctx = self.n_ctx // 2

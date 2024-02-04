@@ -10,7 +10,7 @@ class ImagenetteDataset(object):
           if not os.path.isdir(root):
             os.makedirs(root)
             url = f"https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-{patch_size}.tgz"
-            filename = wget.download(url, out=root)
+            wget.download(url, out=root)
             with tarfile.open(root+f"/imagenette2-{patch_size}.tgz", 'r:gz') as tar:
                 # Extract all contents to the specified directory
                 tar.extractall(path=root)

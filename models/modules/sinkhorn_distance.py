@@ -76,12 +76,9 @@ class SinkhornDistance(nn.Module):
     @staticmethod
     def _cost_matrix(x, y, p=2):
         "Returns the matrix of $|x_i-y_j|^p$."
-        # print(x.shape, y.shape)
         x_col = x.unsqueeze(-2)
         y_lin = y.unsqueeze(-3)
-        # print(x_col.shape, y_lin.shape)
         C = torch.sum((torch.abs(x_col - y_lin)) ** p, -1)
-        # C.detach()
         return C
 
     @staticmethod

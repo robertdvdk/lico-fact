@@ -3,8 +3,9 @@ import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler
 import math
 
-def calculate_manifold_loss(A, B):
-    return torch.mean(torch.sum(A*torch.log(A/B), dim=1))
+def calculate_manifold_loss(A, B, eps=0.0001):
+    # Add small eps for numerical stability (avoid log(0) and log(inf)).
+    return torch.mean(torch.sum(A*torch.log((A + eps)/ (B+eps)), dim=1))
 
 def get_accuracy(model, test_loader, device):
     model.eval()
@@ -17,7 +18,7 @@ def get_accuracy(model, test_loader, device):
             inputs, labels = inputs.to(device), labels.to(device)
 
             # Forward pass
-            outputs, _, _ = model.forward_with_distances(inputs, targets=labels, mode='test')
+            outputs, _, _ = model(inputs, targets=labels, mode='test')
 
             # Get the predicted class with the highest score
             _, predicted = torch.max(outputs.data, 1)
@@ -52,13 +53,13 @@ def get_loss(model, dataloader, device, w_distance, alpha, beta):
             # emb: unrolled feature maps, w_loss: OT loss
             # label_distribution: similarity matrix of the embedded prompts
 
-            out, emb_matrix, emb, w_loss, label_distribution = model.forward_with_distances(x, targets=y, w_distance=w_distance)
+            out, AF, w_loss, AG = model(x, targets=y, w_distance=w_distance)
 
             # cross-entropy loss
             ce_loss = CELoss(out, y)
 
             # manifold loss
-            m_loss = calculate_manifold_loss(label_distribution, emb_matrix)
+            m_loss = calculate_manifold_loss(AG, AF)
 
             # get the full loss
 
