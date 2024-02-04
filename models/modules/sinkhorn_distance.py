@@ -65,13 +65,6 @@ class SinkhornDistance(nn.Module):
         U, V = u, v
         # Transport plan pi = diag(a)*K*diag(b)
         pi = torch.exp(self.M(C, U, V))
-        # Sinkhorn distance
-        # cost = torch.sum(pi * C, dim=(-2, -1))
-
-        # if self.reduction == 'mean':
-        #     cost = cost.mean()
-        # elif self.reduction == 'sum':
-        #     cost = cost.sum()
 
         return pi, C
 
@@ -112,16 +105,7 @@ class SinkhornDistance(nn.Module):
 
 
 if __name__ == '__main__':
-    
-    torch.cuda.set_device(4)
-    x = torch.FloatTensor(8, 8, 1).cuda()
-    y = torch.FloatTensor(8, 8, 1).cuda()
-
-    loss = SinkhornDistance(eps=0.1, max_iter=100, reduction='sum').cuda()
-
-    cost, p, c = loss(x, y)
-    print(cost, p.size(), c.size())
-
+    pass
 
 
 

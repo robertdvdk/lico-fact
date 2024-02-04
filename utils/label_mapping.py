@@ -9,9 +9,12 @@ def euclidean_distance(A):
             batch. Similarly, G_B = [G_1, ..., G_n].
 
     Returns:
+        dists (torch.Tensor): A tensor of shape (batch_size, batch_size) containing the pairwise Euclidean distances
+            between samples in the batch.
         """
     # Convert the tensor to 2D, and then calculate the pairwise Euclidean distances between samples in the batch.
     # Calculating the Euclidean distance between row vectors in a 2D tensor in this way is equivalent to calculating the
     # Euclidean distance between the matrices in a 3D tensor.
     A = A.view(A.shape[0], -1)
-    return torch.cdist(A, A, p=2.0)
+    dists = torch.cdist(A, A, p=2.0)
+    return dists

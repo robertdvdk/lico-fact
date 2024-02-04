@@ -112,7 +112,7 @@ def get_saliency_maps(images, method='random', generator=None, targets=None, tar
     return heatmap
 
 
-def insertion(images, saliency_maps, indices, targets, model, pixel_batch_size, blur):
+def insertion(images, indices, targets, model, pixel_batch_size, blur):
     '''
     images: (B, C, H, W)
     saliency maps: (B, C, H, W)
@@ -160,7 +160,7 @@ def insertion(images, saliency_maps, indices, targets, model, pixel_batch_size, 
     return probs
 
 
-def deletion(images, saliency_maps, indices, targets, model, pixel_batch_size):
+def deletion(images, indices, targets, model, pixel_batch_size):
     '''
     images: (B, C, H, W)
     saliency maps: (B, C, H, W)
