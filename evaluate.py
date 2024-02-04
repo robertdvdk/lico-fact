@@ -17,6 +17,8 @@ parser.add_argument('--batch_size', type=int, default=64, help='Testing batch si
 parser.add_argument('--seed', type=int, default=42, help='Random seed')
 parser.add_argument('--depth', type=int, default=28, help='WRN depth')
 parser.add_argument('--width', type=int, default=2, help='WRN width')
+parser.add_argument('--fixed_temperature', default=False, action='store_true',
+                        help="Whether to use a fixed softmax temperature")
 
 args = parser.parse_args()
 
@@ -75,7 +77,7 @@ else:
 testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
                                          shuffle=True, num_workers=2)
 
-wrn_builder = build_WideResNet(args.depth, args.width, 0.5)
+wrn_builder = build_WideResNet(args.depth, args.width, 0.5, args.fixed_temperature)
 wrn = wrn_builder.build(classes)
 model = wrn.to(device)
     

@@ -2,18 +2,14 @@
 Calculate the insertion/deletion score on a given dataset for a trained model
 '''
 
-import torch
 import torchvision
 import torchvision.transforms as transforms
 from models.wideresnet_prompt import *
-from utils.misc import *
 import argparse
 import sys
 from torchvision.transforms import GaussianBlur
 import matplotlib.pyplot as plt
-import torchvision.utils as vutils
 from utils.RISE import *
-from PIL import Image
 from utils.misc import *
 from pytorch_grad_cam import GradCAM, ScoreCAM, GradCAMPlusPlus
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
@@ -217,43 +213,6 @@ def viz_insertion_deletion(probs, plot_type='Unspecified', filename='plot.png'):
     plt.title(f'{plot_type} plot')
 
     plt.savefig(filename)
-        
-
-# test out RISE for a single example
-
-'''
-
-rise = RISE(model, input_size=(32,32), initial_mask_size=(7,7))
-
-x, y = next(iter(testloader))
-x, y = x.to(device), y.to(device)
-
-x = x[1, ...].unsqueeze(0)
-y = y[1].unsqueeze(0)
-
-saliency_maps = rise.forward(x)[int(y), :, :]
-print(saliency_maps.shape)
-H, W = saliency_maps.shape
-num_pixels = H*W
-
-flat_saliency_maps = saliency_maps.view(1, -1)
-
-_, indices = torch.topk(flat_saliency_maps, num_pixels, dim=1)
-indices = torch.stack((indices // W, indices % W), dim=-1)
-
-# get insertion and deletion probs
-
-insertion_probs = insertion(x, saliency_maps, indices, y, model, 10, blur)
-deletion_probs = deletion(x, saliency_maps, indices, y, model, 10)
-
-insertion_probs = insertion_probs.squeeze().detach().numpy()
-deletion_probs = deletion_probs.squeeze().detach().numpy()
-
-viz_insertion_deletion(insertion_probs, "Insertion", './plots/RISE_insertion_test.png')
-viz_insertion_deletion(deletion_probs, "Deletion", './plots/RISE_deletion_test.png')
-
-'''
-
 
 if args.saliency_method == 'RISE':
     generator = RISE(model, input_size=(32, 32), initial_mask_size=(7, 7))

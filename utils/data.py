@@ -2,9 +2,7 @@ import os
 from pathlib import Path
 import wget
 import tarfile
-import torchvision
 from PIL import Image
-from torchvision import transforms
 
 class ImagenetteDataset(object):
     def __init__(self, root, patch_size=320, download=True, validation=False, transform=None):

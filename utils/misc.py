@@ -1,13 +1,10 @@
 import torch
 import torch.nn as nn
-from models.modules.sinkhorn_distance import SinkhornDistance
 from torch.optim.lr_scheduler import _LRScheduler
 import math
 
 def calculate_manifold_loss(A, B):
-
     return torch.mean(torch.sum(A*torch.log(A/B), dim=1))
-
 
 def get_accuracy(model, test_loader, device):
     model.eval()
