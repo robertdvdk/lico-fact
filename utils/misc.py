@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler
 import math
+import numpy as np
 
 def calculate_manifold_loss(A, B, eps=0.0001):
     # Add small eps for numerical stability (avoid log(0) and log(inf)).
@@ -81,3 +82,10 @@ class CosineAnnealingStepLR(_LRScheduler):
         return [self.eta_min + (base_lr - self.eta_min) * 
                 math.cos(7 * math.pi * self._step_count / (16 * self.T_max)) 
                 for base_lr in self.base_lrs]
+
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
