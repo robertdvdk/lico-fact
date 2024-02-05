@@ -183,8 +183,6 @@ def run_evaluation(testloader, device, model, generator, saliency_method, blur, 
 
         torch.cuda.empty_cache()
 
-        print(num_batches)
-
         avg_auc_insertion = running_avg_auc_insertion / num_batches
         avg_auc_deletion = running_avg_auc_deletion / num_batches
 
