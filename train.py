@@ -115,6 +115,8 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='Seed for the random number generator')
     parser.add_argument('--fixed_temperature', default=False, action='store_true',
                         help="Whether to use a fixed softmax temperature")
+    parser.add_argument('--image_feature_dim', default=64, type=int,
+                        help="Dimension of feature maps")
 
     args = parser.parse_args()
 
@@ -246,7 +248,7 @@ def main():
 
 
 
-    wrn_builder = build_WideResNet(args.depth, args.width, 0.5, fixed_temperature=args.fixed_temperature)
+    wrn_builder = build_WideResNet(args.depth, args.width, 0.5, fixed_temperature=args.fixed_temperature, image_feature_dim=args.image_feature_dim)
     wrn = wrn_builder.build(classnames)
     wrn = wrn.to(device)
 

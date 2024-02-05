@@ -12,14 +12,12 @@ from utils.RISE import *
 from utils.misc import *
 from pytorch_grad_cam import GradCAM, ScoreCAM, GradCAMPlusPlus
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-
+from utils.data import ImagenetteDataset
 
 def get_saliency_maps(images, model, method='random', generator=None, targets=None, target_layers=None):
     if method == 'random':
-        # just do random saliency maps for now to test
         heatmap = torch.rand((images.shape[0], images.shape[2], images.shape[3]))
     elif method == 'RISE':
-        # for the implementation we use we need to do RISE individually for each image
         heatmap = torch.empty((images.shape[0], images.shape[2], images.shape[3]))
         for i in range(images.shape[0]):
             x = images[i, ...]
@@ -142,7 +140,7 @@ def viz_insertion_deletion(probs, plot_type='Unspecified', filename='plot.png'):
     plt.savefig(filename)
 
 
-def run_evaluation(testloader, device, model, generator, saliency_method, blur):
+def run_evaluation(testloader, device, model, generator, saliency_method, blur, pixel_batch_size):
     num_batches = 0
     running_avg_auc_insertion = 0
     running_avg_auc_deletion = 0
@@ -165,8 +163,8 @@ def run_evaluation(testloader, device, model, generator, saliency_method, blur):
         indices = torch.stack((indices // W, indices % W), dim=-1)
 
         # get insertion and deletion probs
-        insertion_probs = insertion(x, saliency_maps, indices, y, model, 10, blur)
-        deletion_probs = deletion(x, saliency_maps, indices, y, model, 10)
+        insertion_probs = insertion(x, indices, y, model, pixel_batch_size, blur)
+        deletion_probs = deletion(x, indices, y, model, pixel_batch_size)
 
         # get the auc of insertion probs
         dx = 1 / insertion_probs.shape[1]
@@ -204,7 +202,11 @@ def main():
                         help='Which method to use to obtain saliency maps')
     parser.add_argument('--depth', type=int, default=28, help='WRN depth')
     parser.add_argument('--width', type=int, default=2, help='WRN width')
+    parser.add_argument('--n_masks', type=int, default=250, help='Number of masks for RISE')
     parser.add_argument('--data_root', type=str, default='../../data/', help='Path to data')
+    parser.add_argument('--image_feature_dim', default=64, type=int,
+                        help="Dimension of feature maps")
+
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -217,13 +219,13 @@ def main():
         'imagenette_320': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     }
 
-    assert args.train_dataset in dataset_statistics.keys(), print('Invalid dataset name')
+    assert args.test_dataset in dataset_statistics.keys(), print('Invalid dataset name')
 
     if args.test_dataset == 'cifar10':
         test_transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(dataset_statistics[args.train_dataset][0],
-                                 dataset_statistics[args.train_dataset][1])
+            transforms.Normalize(dataset_statistics[args.test_dataset][0],
+                                 dataset_statistics[args.test_dataset][1])
         ])
         testset = torchvision.datasets.CIFAR10(root=args.data_root, train=False, download=True,
                                                transform=test_transform)
@@ -232,8 +234,8 @@ def main():
     elif args.test_dataset == 'cifar100':
         test_transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(dataset_statistics[args.train_dataset][0],
-                                 dataset_statistics[args.train_dataset][1])
+            transforms.Normalize(dataset_statistics[args.test_dataset][0],
+                                 dataset_statistics[args.test_dataset][1])
         ])
         testset = torchvision.datasets.CIFAR100(root=args.data_root, train=False, download=True,
                                                 transform=test_transform)
@@ -258,11 +260,30 @@ def main():
                           'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train',
                           'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor'])
 
+
+    elif args.test_dataset == 'imagenette_160':
+
+        test_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(dataset_statistics[args.test_dataset][0],
+                                 dataset_statistics[args.test_dataset][1]),
+            transforms.Resize((160, 160))
+        ])
+
+        testset = ImagenetteDataset(args.data_root + args.test_dataset, 160,
+                                    download=True, validation=True, transform=test_transform)
+
+        classes = ("tench", "English springer", "cassette player", "chain saw",
+                      "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute")
+
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
-    wrn_builder = build_WideResNet(args.depth, args.width, 0.5)
+    wrn_builder = build_WideResNet(args.depth, args.width, 0.5, image_feature_dim=args.image_feature_dim)
     wrn = wrn_builder.build(classes)
     model = wrn.to(device)
+
+    # replace forward method with get_logits to conform to grad_cam library
+    model.forward = model.logits
 
     # load the model
     model.load_state_dict(torch.load(args.model_path, map_location=device))
@@ -270,14 +291,14 @@ def main():
     print("Successfully loaded model")
 
     if args.saliency_method == 'RISE':
-        generator = RISE(model, input_size=(32, 32), initial_mask_size=(7, 7))
+        generator = RISE(model, input_size=(32, 32), initial_mask_size=(7, 7), n_masks=args.n_masks)
     else:
         generator = None
 
     blur = GaussianBlur(int(2 * args.sigma - 1), args.sigma)
 
     avg_auc_insertion, avg_auc_deletion = run_evaluation(testloader, device, model, generator, args.saliency_method,
-                                                         blur)
+                                                         blur, args.pixel_batch_size)
 
     print(f"Average AUC insertion for given model/dataset: {avg_auc_insertion}")
     print(f"Average AUC deletion for given model/dataset: {avg_auc_deletion}")

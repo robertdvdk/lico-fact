@@ -3,6 +3,7 @@ import torchvision.transforms as transforms
 from models.wideresnet_prompt import *
 from utils.misc import *
 import argparse
+from utils.data import ImagenetteDataset
 
 def main():
     parser = argparse.ArgumentParser(description='Evaluate on test set')
@@ -16,6 +17,9 @@ def main():
     parser.add_argument('--fixed_temperature', default=False, action='store_true',
                         help="Whether to use a fixed softmax temperature")
     parser.add_argument('--data_root', type=str, default='../../data/', help='Path to data')
+    parser.add_argument('--image_feature_dim', default=64, type=int,
+                        help="Dimension of feature maps")
+
 
     args = parser.parse_args()
 
@@ -38,8 +42,8 @@ def main():
     if args.test_dataset == 'cifar10':
         test_transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(dataset_statistics[args.train_dataset][0],
-                                 dataset_statistics[args.train_dataset][1])
+            transforms.Normalize(dataset_statistics[args.test_dataset][0],
+                                 dataset_statistics[args.test_dataset][1])
         ])
         testset = torchvision.datasets.CIFAR10(root=args.data_root, train=False, download=True,
                                                transform=test_transform)
@@ -48,8 +52,8 @@ def main():
     elif args.test_dataset == 'cifar100':
         test_transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(dataset_statistics[args.train_dataset][0],
-                                 dataset_statistics[args.train_dataset][1])
+            transforms.Normalize(dataset_statistics[args.test_dataset][0],
+                                 dataset_statistics[args.test_dataset][1])
         ])
         testset = torchvision.datasets.CIFAR100(root=args.data_root, train=False, download=True,
                                                 transform=test_transform)
@@ -73,11 +77,26 @@ def main():
                           'maple', 'oak', 'palm', 'pine', 'willow',
                           'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train',
                           'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor'])
+        
+    elif args.test_dataset == 'imagenette_160':
+
+        test_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(dataset_statistics[args.test_dataset][0],
+                                 dataset_statistics[args.test_dataset][1]),
+            transforms.Resize((160, 160))
+        ])
+
+        testset = ImagenetteDataset(args.data_root + args.test_dataset, 160,
+                                    download=True, validation=True, transform=test_transform)
+
+        classes = ("tench", "English springer", "cassette player", "chain saw",
+                      "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute")
 
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
                                              shuffle=False, num_workers=2)
 
-    wrn_builder = build_WideResNet(args.depth, args.width, 0.5, args.fixed_temperature)
+    wrn_builder = build_WideResNet(args.depth, args.width, 0.5, args.fixed_temperature, args.image_feature_dim)
     wrn = wrn_builder.build(classes)
     model = wrn.to(device)
 

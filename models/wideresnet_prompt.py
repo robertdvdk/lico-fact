@@ -57,7 +57,7 @@ class NetworkBlock(nn.Module):
 
 
 class WideResNetPrompt(nn.Module):
-    def __init__(self, classnames, depth=28, widen_factor=2, drop_rate=0.0, fixed_temperature=False):
+    def __init__(self, classnames, depth=28, widen_factor=2, drop_rate=0.0, fixed_temperature=False, image_feature_dim=64):
         super(WideResNetPrompt, self).__init__()
         channels = [16, 16 * widen_factor, 32 * widen_factor, 64 * widen_factor]
         assert ((depth - 4) % 6 == 0)
@@ -81,6 +81,8 @@ class WideResNetPrompt(nn.Module):
         self.fc = nn.Linear(channels[3], len(classnames))
         self.channels = channels[3]
 
+        self.image_feature_dim = image_feature_dim
+
         # This is a learned parameter, as noted just after Equation (1). We initialise it to log(1/0.07) as this is
         # the value used in the CLIP paper.
         if not fixed_temperature:
@@ -103,7 +105,7 @@ class WideResNetPrompt(nn.Module):
             nn.Linear(512, 512),
             nn.Dropout(0.5),
             nn.ReLU(),
-            nn.Linear(512, 64)
+            nn.Linear(512, self.image_feature_dim)
         )
 
     def forward(self, x, targets=None, w_distance=None, mode='train'):
@@ -166,17 +168,18 @@ class WideResNetPrompt(nn.Module):
 
 
 class build_WideResNet:
-    def __init__(self, depth=28, widen_factor=2, drop_rate=0.0, fixed_temperature=False):
+    def __init__(self, depth=28, widen_factor=2, drop_rate=0.0, fixed_temperature=False, image_feature_dim=64):
         self.depth = depth
         self.widen_factor = widen_factor
         self.drop_rate = drop_rate
         self.fixed_temperature = fixed_temperature
-
+        self.image_feature_dim = image_feature_dim
     def build(self, classnames):
         return WideResNetPrompt(
             depth=self.depth,
             classnames=classnames,
             widen_factor=self.widen_factor,
             drop_rate=self.drop_rate,
-            fixed_temperature=self.fixed_temperature
+            fixed_temperature=self.fixed_temperature,
+            image_feature_dim=self.image_feature_dim
         )
