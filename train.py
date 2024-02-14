@@ -7,7 +7,7 @@ from utils.misc import *
 import argparse
 import os
 from tqdm import tqdm
-from utils.data import ImagenetteDataset
+from utils.data import ImagenetteDataset, PartImageNetClassificationDataset
 from torch.utils.tensorboard import SummaryWriter
 import json
 
@@ -84,10 +84,12 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
             best_model = net.state_dict()
             best_val_loss = val_loss
 
+        torch.save(best_model, f'{full_model_save_path}/{save_model_name}_{epoch}.pt')
+
     if not os.path.exists(os.path.dirname(full_model_save_path)):
         os.makedirs(os.path.dirname(full_model_save_path))
 
-    torch.save(best_model, f'{full_model_save_path}/{save_model_name}.pt')
+    # torch.save(best_model, f'{full_model_save_path}/{save_model_name}.pt')
 
     writer.flush()
 
@@ -146,14 +148,16 @@ def main():
         'cifar10': ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         'cifar100': ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
         'imagenette_160': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        'imagenette_320': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        'imagenette_320': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        'partimagenet': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     }
 
     dataset_image_sizes = {
         'cifar10': 32,
         'cifar100': 32,
         'imagenette_320': 320,
-        'imagenette_160': 160
+        'imagenette_160': 160,
+        'partimagenet': 224
     }
 
     assert args.train_dataset in dataset_statistics.keys(), print('Invalid dataset name')
@@ -225,6 +229,42 @@ def main():
                       'maple', 'oak', 'palm', 'pine', 'willow',
                       'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train',
                       'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor'])
+    elif args.train_dataset == 'partimagenet':
+        # Different transforms for ImageNet
+        train_transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.Resize(224),
+            transforms.RandomCrop(dataset_image_sizes[args.train_dataset], padding=4, padding_mode='reflect'),
+            transforms.Normalize(dataset_statistics[args.train_dataset][0],
+                                 dataset_statistics[args.train_dataset][1])
+        ])
+
+        val_transform = transforms.Compose([
+            transforms.Normalize(dataset_statistics[args.train_dataset][0],
+                                 dataset_statistics[args.train_dataset][1])
+        ])
+        trainset = PartImageNetClassificationDataset(root=args.data_root + 'pim/', split='train', transform=train_transform)
+        valset = PartImageNetClassificationDataset(root=args.data_root + 'pim/', split='val', transform=val_transform)
+        testset = PartImageNetClassificationDataset(root=args.data_root + 'pim/', split='test', transform=val_transform)
+
+        classnames = ['tench', 'goldfish', 'kite', 'common newt', 'spotted salamander', 'bullfrog', 'tailed frog',
+                      'loggerhead', 'leatherback turtle', 'box turtle', 'agama', 'frilled lizard', 'Gila monster',
+                      'green lizard', 'African chameleon', 'Komodo dragon', 'American alligator', 'thunder snake',
+                      'hognose snake', 'green snake', 'garter snake', 'vine snake', 'night snake', 'boa constrictor',
+                      'rock python', 'green mamba', 'horned viper', 'diamondback', 'sidewinder', 'bee eater', 'goose',
+                      'black stork', 'spoonbill', 'American egret', 'ruddy turnstone', 'dowitcher', 'albatross',
+                      'killer whale', 'Walker hound', 'redbone', 'Saluki', 'cairn', 'Boston bull', 'Tibetan terrier',
+                      'soft-coated wheaten terrier', 'vizsla', 'Brittany spaniel', 'English springer',
+                      'Irish water spaniel', 'Eskimo dog', 'chow', 'timber wolf', 'Egyptian cat', 'leopard', 'tiger',
+                      'cheetah', 'brown bear', 'American black bear', 'fox squirrel', 'warthog', 'ox', 'water buffalo',
+                      'ram', 'bighorn', 'hartebeest', 'impala', 'gazelle', 'Arabian camel', 'weasel', 'polecat',
+                      'otter', 'gorilla', 'chimpanzee', 'gibbon', 'guenon', 'patas', 'baboon', 'macaque', 'colobus',
+                      'proboscis monkey', 'capuchin', 'howler monkey', 'spider monkey', 'giant panda', 'coho',
+                      'anemone fish', 'airliner', 'ambulance', 'beer bottle', 'convertible', 'garbage truck',
+                      'go-kart', 'golfcart', 'limousine', 'minibus', 'minivan', 'motor scooter', 'mountain bike',
+                      'pill bottle', 'pirate', 'police van', 'pop bottle', 'racer', 'recreational vehicle',
+                      'school bus', 'snowplow', 'tractor', 'tricycle', 'yawl']
+
     else:
         image_size = int(args.train_dataset.split("_")[-1])
         trainset_full = ImagenetteDataset(args.data_root + args.train_dataset, image_size,
@@ -241,10 +281,8 @@ def main():
         testset = ImagenetteDataset(args.data_root + args.train_dataset, image_size,
                                     download=True, validation=True, transform=val_transform)
 
-        classnames = ("tench", "English springer", "cassette player", "chain saw",
-                      "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute")
-
-
+        classnames = sorted(["tench", "English springer", "cassette player", "chain saw",
+                      "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute"])
 
     wrn_builder = build_WideResNet(args.depth, args.width, 0.5, fixed_temperature=args.fixed_temperature)
     wrn = wrn_builder.build(classnames)

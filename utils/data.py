@@ -3,9 +3,13 @@ from pathlib import Path
 import wget
 import tarfile
 from PIL import Image
+import torch.utils.data
+import torchvision.datasets.coco
+import matplotlib.pyplot as plt
 
-class ImagenetteDataset(object):
+class ImagenetteDataset(torch.utils.data.Dataset):
     def __init__(self, root, patch_size=320, download=True, validation=False, transform=None):
+        super(ImagenetteDataset, self).__init__()
         if download:
           if not os.path.isdir(root):
             os.makedirs(root)
@@ -46,7 +50,6 @@ class ImagenetteDataset(object):
         label = image_fname.parent.stem
         label = self.classes_to_idx[label]
 
-        #if image.shape[0] == 1: image = image.expand(3, 320, 320)
         if self.transform:
             image = self.transform(image)
         
@@ -54,3 +57,78 @@ class ImagenetteDataset(object):
 
     def __len__(self):
         return len(self.images)
+
+class PartImageNetClassificationDataset(torch.utils.data.Dataset):
+    def __init__(self, root, split='train', transform=None):
+        super(PartImageNetClassificationDataset, self).__init__()
+        self.classes = sorted(os.listdir(root + split))
+        self.classes_to_idx = {cls: i for i, cls in enumerate(self.classes)}
+        self.images = []
+        for cls in self.classes:
+            cls_images = os.listdir(root + split + '/' + cls)
+            self.images.extend(cls_images)
+        self.idx_to_images = {i: img for i, img in enumerate(self.images)}
+        self.root = root + split + '/'
+        self.transform = transform
+
+    def __getitem__(self, item):
+        directory = self.root + self.idx_to_images[item].split('_')[0] + '/'
+        image = torchvision.io.read_image(directory + self.idx_to_images[item]).float() / 255.
+        label = self.classes_to_idx[self.idx_to_images[item].split('_')[0]]
+
+        if image.shape[0] == 1:
+            image = image.repeat(3, 1, 1)
+
+        if image.shape[0] == 4:
+            image = image[:3]
+
+        if self.transform:
+            image = self.transform(image)
+
+
+        return image, label
+
+    def __len__(self):
+        return len(self.images)
+
+class PartImageNetDataset(torchvision.datasets.coco.CocoDetection):
+    def __init__(self, root, annFile, transform=None, target_transform=None, transforms=None):
+        super(PartImageNetDataset, self).__init__(root, annFile, transform, target_transform, transforms)
+    def __getitem__(self, index):
+        image, target = super(PartImageNetDataset, self).__getitem__(index)
+        print(target)
+        print(self.__annotations__)
+        try:
+            return image, target[0]['category_id']
+        except IndexError:
+            return image, -1
+
+
+def split_partimagenet_trainvaltest():
+    root = '../../../data/pim/'
+    train = root + 'train/'
+    val = root + 'val/'
+    test = root + 'test/'
+    if not os.path.isdir(val):
+        os.makedirs(val)
+    if not os.path.isdir(test):
+        os.makedirs(test)
+    for cls in os.listdir(train):
+        if not os.path.isdir(val + cls):
+            os.makedirs(val + cls)
+        if not os.path.isdir(test + cls):
+            os.makedirs(test + cls)
+        cls_images = os.listdir(train + cls)
+        val_images = cls_images[int(0.8 * len(cls_images)):int(0.9 * len(cls_images))]
+        test_images = cls_images[int(0.9 * len(cls_images)):]
+        for img in val_images:
+            os.rename(train + cls + '/' + img, val + cls + '/' + img)
+        for img in test_images:
+            os.rename(train + cls + '/' + img, test + cls + '/' + img)
+
+if __name__ == "__main__":
+    trainset = PartImageNetClassificationDataset('../../../data/pim/', split='train', transform=torchvision.transforms.Resize((224, 224)))
+    dl = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
+    for x, y, z in dl:
+        pass
+    # split_partimagenet_trainvaltest()
