@@ -2,6 +2,7 @@ from torch.optim import SGD
 import torchvision
 import torchvision.transforms as transforms
 from models.wideresnet_prompt import *
+from models.resnet_prompt import *
 from models.modules.sinkhorn_distance import SinkhornDistance
 from utils.misc import *
 import argparse
@@ -236,12 +237,14 @@ def main():
         train_transform = transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.Resize(224),
-            transforms.RandomCrop(dataset_image_sizes[args.train_dataset], padding=4, padding_mode='reflect'),
+            transforms.RandomCrop(dataset_image_sizes[args.train_dataset]),
             transforms.Normalize(dataset_statistics[args.train_dataset][0],
                                  dataset_statistics[args.train_dataset][1])
         ])
 
         val_transform = transforms.Compose([
+            transforms.Resize(224),
+            transforms.CenterCrop(dataset_image_sizes[args.train_dataset]),
             transforms.Normalize(dataset_statistics[args.train_dataset][0],
                                  dataset_statistics[args.train_dataset][1])
         ])
@@ -286,9 +289,15 @@ def main():
         classnames = sorted(["tench", "English springer", "cassette player", "chain saw",
                       "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute"])
 
-    wrn_builder = build_WideResNet(args.depth, args.width, 0.5, fixed_temperature=args.fixed_temperature, image_feature_dim=args.image_feature_dim)
-    wrn = wrn_builder.build(classnames)
-    wrn = wrn.to(device)
+
+    if args.train_dataset == 'partimagenet':
+        net = ResNetPrompt(classnames, BasicBlock, [2, 2, 2, 2])
+        net = net.to(device)
+    else:
+        wrn_builder = build_WideResNet(args.depth, args.width, 0.5, fixed_temperature=args.fixed_temperature, image_feature_dim=args.image_feature_dim)
+        net = wrn_builder.build(classnames)
+        net = net.to(device)
+
 
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
                                               shuffle=True, num_workers=args.num_workers)
@@ -305,15 +314,15 @@ def main():
     w_distance = SinkhornDistance(args.sinkhorn_eps, args.sinkhorn_max_iters)
 
     # Freeze the clip model
-    for name, param in wrn.named_parameters():
+    for name, param in net.named_parameters():
         if name.startswith('clip'):
             param.requires_grad = False
 
-    optimizer = SGD(filter(lambda p: p.requires_grad, wrn.parameters()), lr=args.lr, momentum=args.momentum,
+    optimizer = SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=args.momentum,
                     weight_decay=args.weight_decay)
     scheduler = CosineAnnealingStepLR(optimizer, T_max=num_steps)
 
-    train(wrn, trainloader, valloader, optimizer, scheduler, args.alpha, args.beta, w_distance, num_epochs, device,
+    train(net, trainloader, valloader, optimizer, scheduler, args.alpha, args.beta, w_distance, num_epochs, device,
           writer, full_model_save_path, args.save_model_name)
 
 
