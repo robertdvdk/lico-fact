@@ -58,7 +58,7 @@ class BasicBlock(nn.Module):
         return out
 
 class ResNetPrompt(nn.Module):
-    def __init__(self, classnames, block, layers):
+    def __init__(self, classnames, block, layers, mode='train'):
         super().__init__()
         norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
@@ -96,6 +96,8 @@ class ResNetPrompt(nn.Module):
             nn.ReLU(),
             nn.Linear(512, 49)
         )
+
+        self.mode = mode
 
     def _make_layer(self, block, planes, blocks, stride = 1,
         dilate: bool = False):
@@ -143,7 +145,7 @@ class ResNetPrompt(nn.Module):
         # Note: prompt_length here is <BOS> + n_ctx + (tokens for class: "aquarium fish" is 2 tokens) + '.' + <EOS>
         text_features = text_features[targets]  # (batch_size, prompt_length, 512)
 
-        if mode == 'train':
+        if mode == 'train' and self.mode == 'train':
             # prompt learning
             text_features_w = self.mlp(text_features)  # (batch_size, prompt_length, 64). This is G_i in the paper.
             feature_maps = F.normalize(feature_maps, dim=-1)  # (batch_size, num_channels, 64)
@@ -156,7 +158,5 @@ class ResNetPrompt(nn.Module):
             # Note: AG stands for A^G in the paper. This is the similarity matrix of the embedded prompts.
             return x, AF, w_loss, AG
 
-        elif mode == 'test':
-            text_distance_matrix = euclidean_distance(text_features)
-            AG = F.softmax(-text_distance_matrix / softmax_temp, dim=1)
-            return x, AF, AG
+        elif mode == 'test' or self.mode == 'test':
+            return x

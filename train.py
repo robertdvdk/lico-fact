@@ -85,12 +85,10 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
             best_model = net.state_dict()
             best_val_loss = val_loss
 
-        torch.save(best_model, f'{full_model_save_path}/{save_model_name}_{epoch}.pt')
-
     if not os.path.exists(os.path.dirname(full_model_save_path)):
         os.makedirs(os.path.dirname(full_model_save_path))
 
-    # torch.save(best_model, f'{full_model_save_path}/{save_model_name}.pt')
+    torch.save(best_model, f'{full_model_save_path}/{save_model_name}.pt')
 
     writer.flush()
 
@@ -152,7 +150,8 @@ def main():
         'cifar100': ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
         'imagenette_160': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         'imagenette_320': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        'partimagenet': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        'partimagenet': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        'imagenet': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     }
 
     dataset_image_sizes = {
@@ -160,7 +159,8 @@ def main():
         'cifar100': 32,
         'imagenette_320': 320,
         'imagenette_160': 160,
-        'partimagenet': 224
+        'partimagenet': 224,
+        'imagenet': 224
     }
 
     assert args.train_dataset in dataset_statistics.keys(), print('Invalid dataset name')
@@ -248,27 +248,14 @@ def main():
             transforms.Normalize(dataset_statistics[args.train_dataset][0],
                                  dataset_statistics[args.train_dataset][1])
         ])
-        trainset = PartImageNetClassificationDataset(root=args.data_root + 'pim/', split='train', transform=train_transform)
-        valset = PartImageNetClassificationDataset(root=args.data_root + 'pim/', split='val', transform=val_transform)
-        testset = PartImageNetClassificationDataset(root=args.data_root + 'pim/', split='test', transform=val_transform)
+        trainset = PartImageNetClassificationDataset(root=args.data_root + 'partimagenet/',
+                                                     split='train', transform=train_transform)
+        valset = PartImageNetClassificationDataset(root=args.data_root + 'partimagenet/',
+                                                   split='val', transform=val_transform)
+        testset = PartImageNetClassificationDataset(root=args.data_root + 'partimagenet/',
+                                                    split='test', transform=val_transform)
 
-        classnames = ['tench', 'goldfish', 'kite', 'common newt', 'spotted salamander', 'bullfrog', 'tailed frog',
-                      'loggerhead', 'leatherback turtle', 'box turtle', 'agama', 'frilled lizard', 'Gila monster',
-                      'green lizard', 'African chameleon', 'Komodo dragon', 'American alligator', 'thunder snake',
-                      'hognose snake', 'green snake', 'garter snake', 'vine snake', 'night snake', 'boa constrictor',
-                      'rock python', 'green mamba', 'horned viper', 'diamondback', 'sidewinder', 'bee eater', 'goose',
-                      'black stork', 'spoonbill', 'American egret', 'ruddy turnstone', 'dowitcher', 'albatross',
-                      'killer whale', 'Walker hound', 'redbone', 'Saluki', 'cairn', 'Boston bull', 'Tibetan terrier',
-                      'soft-coated wheaten terrier', 'vizsla', 'Brittany spaniel', 'English springer',
-                      'Irish water spaniel', 'Eskimo dog', 'chow', 'timber wolf', 'Egyptian cat', 'leopard', 'tiger',
-                      'cheetah', 'brown bear', 'American black bear', 'fox squirrel', 'warthog', 'ox', 'water buffalo',
-                      'ram', 'bighorn', 'hartebeest', 'impala', 'gazelle', 'Arabian camel', 'weasel', 'polecat',
-                      'otter', 'gorilla', 'chimpanzee', 'gibbon', 'guenon', 'patas', 'baboon', 'macaque', 'colobus',
-                      'proboscis monkey', 'capuchin', 'howler monkey', 'spider monkey', 'giant panda', 'coho',
-                      'anemone fish', 'airliner', 'ambulance', 'beer bottle', 'convertible', 'garbage truck',
-                      'go-kart', 'golfcart', 'limousine', 'minibus', 'minivan', 'motor scooter', 'mountain bike',
-                      'pill bottle', 'pirate', 'police van', 'pop bottle', 'racer', 'recreational vehicle',
-                      'school bus', 'snowplow', 'tractor', 'tricycle', 'yawl']
+        classnames = sorted(['cairn', 'patas', 'anemone fish', 'barracouta', 'tractor', 'howler monkey', 'beach wagon', 'otter', 'Gila monster', 'jacamar', 'box turtle', 'hognose snake', 'Brittany spaniel', 'alligator lizard', 'bighorn', 'schooner', 'squirrel monkey', 'kite', 'cheetah', 'yawl', 'puffer', 'vine snake', 'coucal', 'marmoset', 'bicycle-built-for-two', 'ibex', 'badger', 'diamondback', 'American black bear', 'Arabian camel', 'frilled lizard', 'Weimaraner', 'moped', 'weasel', 'orangutan', 'trimaran', 'limousine', 'macaque', 'mink', 'bee eater', 'unicycle', 'gorilla', 'proboscis monkey', 'snowplow', 'tree frog', 'loggerhead', 'boa constrictor', 'Irish water spaniel', 'capuchin', 'garter snake', 'golfcart', 'recreational vehicle', 'African crocodile', 'gibbon', 'convertible', 'mud turtle', 'Walker hound', 'terrapin', 'green lizard', 'night snake', 'colobus', 'ringneck snake', 'brown bear', 'goldfish', 'polecat', 'tricycle', 'common newt', 'Tibetan terrier', 'pirate', 'tench', 'minivan', 'Boston bull', 'cougar', 'warplane', 'great white shark', 'golden retriever', 'warthog', 'airliner', 'giant panda', 'green mamba', 'sloth bear', 'ice bear', 'sidewinder', 'little blue heron', 'American egret', 'redbone', 'sports car', 'tailed frog', 'African chameleon', 'Indian cobra', 'titi', 'English springer', 'siamang', 'Saint Bernard', 'jeep', 'horned viper', 'albatross', 'dowitcher', 'spoonbill', 'bald eagle', 'chimpanzee', 'ruddy turnstone', 'coho', 'police van', 'timber wolf', 'hartebeest', 'ambulance', 'water bottle', 'rock python', 'leopard', 'American alligator', 'beer bottle', 'Komodo dragon', 'ox', 'racer', 'Saluki', 'whiptail', 'wine bottle', 'vizsla', 'tiger', 'agama', 'baboon', 'European gallinule', 'chow', 'spotted salamander', 'king snake', 'mountain bike', 'Japanese spaniel', 'cab', 'black stork', 'ram', 'garbage truck', 'hammerhead', 'green snake', 'Arctic fox', 'tiger shark', 'guenon', 'go-kart', 'Egyptian cat', 'minibus', 'pill bottle', 'impala', 'soft-coated wheaten terrier', 'fox squirrel', 'thunder snake', 'spider monkey', 'killer whale', 'water buffalo', 'goose', 'Eskimo dog', 'leatherback turtle', 'Gordon setter', 'pop bottle', 'bullfrog', 'gazelle', 'trolleybus', 'school bus', 'motor scooter'], key = lambda x: x.lower())
 
     else:
         image_size = int(args.train_dataset.split("_")[-1])

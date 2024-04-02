@@ -58,23 +58,36 @@ class ImagenetteDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.images)
 
+
 class PartImageNetClassificationDataset(torch.utils.data.Dataset):
-    def __init__(self, root, split='train', transform=None):
+    def __init__(self, root, split='train', transform=None, return_masks=False):
         super(PartImageNetClassificationDataset, self).__init__()
-        self.classes = sorted(os.listdir(root + split))
-        self.classes_to_idx = {cls: i for i, cls in enumerate(self.classes)}
-        self.images = []
-        for cls in self.classes:
-            cls_images = os.listdir(root + split + '/' + cls)
-            self.images.extend(cls_images)
-        self.idx_to_images = {i: img for i, img in enumerate(self.images)}
-        self.root = root + split + '/'
+        self.root = root
+        if not os.path.exists(root + 'class_mapping.txt'):
+            self.initialise_dataset()
+
+        self.mask_dir = root + '/annotations/' + split + '/'
+        self.img_dir = root + '/images/' + split + '/'
+        self.return_masks = return_masks
         self.transform = transform
+        self.split = split
+
+        self.images = []
+        for image in os.listdir(self.img_dir):
+            self.images.append(image)
+
+        self.classid_to_label = {}
+        with open(self.root + 'class_mapping.txt') as fopen:
+            for line in fopen.readlines():
+                idx, _, class_id = line.strip().split('\t')
+                self.classid_to_label[class_id] = int(idx)
+        self.idx_to_images = {i: img for i, img in enumerate(self.images)}
+        self.images_to_idx = {img: i for i, img in enumerate(self.images)}
+        print(f'Loaded {len(self.idx_to_images)} images from {self.split} split')
 
     def __getitem__(self, item):
-        directory = self.root + self.idx_to_images[item].split('_')[0] + '/'
-        image = torchvision.io.read_image(directory + self.idx_to_images[item]).float() / 255.
-        label = self.classes_to_idx[self.idx_to_images[item].split('_')[0]]
+        image = torchvision.io.read_image(self.img_dir + self.idx_to_images[item]).float() / 255.
+        label = self.classid_to_label[self.idx_to_images[item].split('_')[0]]
 
         if image.shape[0] == 1:
             image = image.repeat(3, 1, 1)
@@ -85,50 +98,43 @@ class PartImageNetClassificationDataset(torch.utils.data.Dataset):
         if self.transform:
             image = self.transform(image)
 
+        if self.return_masks:
+            return image, label, self.getmasks(item)
+        else:
+            return image, label
 
-        return image, label
+    def initialise_dataset(self):
+        imagenet_class_mapping = {}
+        with open('./imagenet_classes.txt') as fopen:
+            for line in fopen.readlines():
+                class_id, _, class_name = line.strip().split(' ')
+                class_name = ' '.join(class_name.split('_'))
+                imagenet_class_mapping[class_id] = class_name
+
+        classes = set()
+        for img in os.listdir(self.root + 'images/train/'):
+            class_id = img.split('_')[0]
+            classes.add(class_id)
+
+        partimagenet_class_mapping = {imagenet_class_mapping[class_id]: class_id for class_id in classes}
+
+        with open(self.root + 'class_mapping.txt', 'w') as fopen:
+            sorted_classnames = sorted(partimagenet_class_mapping.keys(), key=lambda x: x.lower())
+            for idx, class_id in enumerate(sorted_classnames):
+                fopen.write(f'{idx}\t{class_id}\t{partimagenet_class_mapping[class_id]}\n')
 
     def __len__(self):
         return len(self.images)
 
-class PartImageNetDataset(torchvision.datasets.coco.CocoDetection):
-    def __init__(self, root, annFile, transform=None, target_transform=None, transforms=None):
-        super(PartImageNetDataset, self).__init__(root, annFile, transform, target_transform, transforms)
-    def __getitem__(self, index):
-        image, target = super(PartImageNetDataset, self).__getitem__(index)
-        print(target)
-        print(self.__annotations__)
-        try:
-            return image, target[0]['category_id']
-        except IndexError:
-            return image, -1
+    def getmasks(self, item):
+        image_path = self.idx_to_images[item][:-5] + '.png'  # remove .JPEG and add .png
+        image = torchvision.io.read_image(self.mask_dir + image_path).float() / 255.
+        image = torch.where(image < image.max(), 1, 0)  # make the segmentation mask binary
 
+        if self.transform:
+            image = self.transform(image)
 
-def split_partimagenet_trainvaltest():
-    root = '../../../data/pim/'
-    train = root + 'train/'
-    val = root + 'val/'
-    test = root + 'test/'
-    if not os.path.isdir(val):
-        os.makedirs(val)
-    if not os.path.isdir(test):
-        os.makedirs(test)
-    for cls in os.listdir(train):
-        if not os.path.isdir(val + cls):
-            os.makedirs(val + cls)
-        if not os.path.isdir(test + cls):
-            os.makedirs(test + cls)
-        cls_images = os.listdir(train + cls)
-        val_images = cls_images[int(0.8 * len(cls_images)):int(0.9 * len(cls_images))]
-        test_images = cls_images[int(0.9 * len(cls_images)):]
-        for img in val_images:
-            os.rename(train + cls + '/' + img, val + cls + '/' + img)
-        for img in test_images:
-            os.rename(train + cls + '/' + img, test + cls + '/' + img)
+        return image
 
 if __name__ == "__main__":
-    trainset = PartImageNetClassificationDataset('../../../data/pim/', split='train', transform=torchvision.transforms.Resize((224, 224)))
-    dl = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
-    for x, y, z in dl:
-        pass
-    # split_partimagenet_trainvaltest()
+    pass
