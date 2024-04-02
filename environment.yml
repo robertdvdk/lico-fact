@@ -1,4 +1,4 @@
-name: factx
+name: fact
 channels:
   - pytorch
   - nvidia
