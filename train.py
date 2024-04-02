@@ -10,6 +10,7 @@ import os
 from tqdm import tqdm
 from utils.data import ImagenetteDataset, PartImageNetClassificationDataset
 from torch.utils.tensorboard import SummaryWriter
+import torchvision.datasets
 import json
 
 
@@ -160,7 +161,7 @@ def main():
         'imagenette_320': 320,
         'imagenette_160': 160,
         'partimagenet': 224,
-        'imagenet': 224
+        'imagenet': 224,
     }
 
     assert args.train_dataset in dataset_statistics.keys(), print('Invalid dataset name')
@@ -257,6 +258,33 @@ def main():
 
         classnames = sorted(['cairn', 'patas', 'anemone fish', 'barracouta', 'tractor', 'howler monkey', 'beach wagon', 'otter', 'Gila monster', 'jacamar', 'box turtle', 'hognose snake', 'Brittany spaniel', 'alligator lizard', 'bighorn', 'schooner', 'squirrel monkey', 'kite', 'cheetah', 'yawl', 'puffer', 'vine snake', 'coucal', 'marmoset', 'bicycle-built-for-two', 'ibex', 'badger', 'diamondback', 'American black bear', 'Arabian camel', 'frilled lizard', 'Weimaraner', 'moped', 'weasel', 'orangutan', 'trimaran', 'limousine', 'macaque', 'mink', 'bee eater', 'unicycle', 'gorilla', 'proboscis monkey', 'snowplow', 'tree frog', 'loggerhead', 'boa constrictor', 'Irish water spaniel', 'capuchin', 'garter snake', 'golfcart', 'recreational vehicle', 'African crocodile', 'gibbon', 'convertible', 'mud turtle', 'Walker hound', 'terrapin', 'green lizard', 'night snake', 'colobus', 'ringneck snake', 'brown bear', 'goldfish', 'polecat', 'tricycle', 'common newt', 'Tibetan terrier', 'pirate', 'tench', 'minivan', 'Boston bull', 'cougar', 'warplane', 'great white shark', 'golden retriever', 'warthog', 'airliner', 'giant panda', 'green mamba', 'sloth bear', 'ice bear', 'sidewinder', 'little blue heron', 'American egret', 'redbone', 'sports car', 'tailed frog', 'African chameleon', 'Indian cobra', 'titi', 'English springer', 'siamang', 'Saint Bernard', 'jeep', 'horned viper', 'albatross', 'dowitcher', 'spoonbill', 'bald eagle', 'chimpanzee', 'ruddy turnstone', 'coho', 'police van', 'timber wolf', 'hartebeest', 'ambulance', 'water bottle', 'rock python', 'leopard', 'American alligator', 'beer bottle', 'Komodo dragon', 'ox', 'racer', 'Saluki', 'whiptail', 'wine bottle', 'vizsla', 'tiger', 'agama', 'baboon', 'European gallinule', 'chow', 'spotted salamander', 'king snake', 'mountain bike', 'Japanese spaniel', 'cab', 'black stork', 'ram', 'garbage truck', 'hammerhead', 'green snake', 'Arctic fox', 'tiger shark', 'guenon', 'go-kart', 'Egyptian cat', 'minibus', 'pill bottle', 'impala', 'soft-coated wheaten terrier', 'fox squirrel', 'thunder snake', 'spider monkey', 'killer whale', 'water buffalo', 'goose', 'Eskimo dog', 'leatherback turtle', 'Gordon setter', 'pop bottle', 'bullfrog', 'gazelle', 'trolleybus', 'school bus', 'motor scooter'], key = lambda x: x.lower())
 
+    elif args.train_dataset == 'imagenet':
+        # Different transforms for ImageNet
+        train_transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.Resize(224),
+            transforms.RandomCrop(dataset_image_sizes[args.train_dataset]),
+            transforms.ToTensor(),
+            transforms.Normalize(dataset_statistics[args.train_dataset][0],
+                                 dataset_statistics[args.train_dataset][1]),
+        ])
+
+        val_transform = transforms.Compose([
+            transforms.Resize(224),
+            transforms.CenterCrop(dataset_image_sizes[args.train_dataset]),
+            transforms.ToTensor(),
+            transforms.Normalize(dataset_statistics[args.train_dataset][0],
+                                 dataset_statistics[args.train_dataset][1]),
+        ])
+        train_split = torchvision.datasets.ImageNet(root=args.data_root + 'imagenet/',
+                                                     split='train', transform=train_transform)
+        train_size = int(len(train_split) * 0.95)
+        trainset, valset = torch.utils.data.random_split(train_split, [train_size,
+                                                                       len(train_split) - train_size])
+
+        testset = torchvision.datasets.ImageNet(root=args.data_root + 'imagenet/',
+                                                    split='val', transform=val_transform)
+        classnames = tuple([line.strip() for line in open('./utils/imagenet_classes.txt', 'r')])
     else:
         image_size = int(args.train_dataset.split("_")[-1])
         trainset_full = ImagenetteDataset(args.data_root + args.train_dataset, image_size,
@@ -277,7 +305,7 @@ def main():
                       "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute"])
 
 
-    if args.train_dataset == 'partimagenet':
+    if args.train_dataset in ('partimagenet', 'imagenet'):
         net = ResNetPrompt(classnames, BasicBlock, [2, 2, 2, 2])
         net = net.to(device)
     else:
