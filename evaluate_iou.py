@@ -54,16 +54,6 @@ def main():
 
     args = parser.parse_args()
 
-    writer = SummaryWriter(log_dir=f'{args.save_path}/{args.save_model_name}')
-    writer.add_text('Dataset', args.train_dataset)
-    writer.add_text('Learning rate', str(args.lr))
-    writer.add_text('Momentum', str(args.momentum))
-    writer.add_text('Weight decay', str(args.weight_decay))
-    writer.add_text('Number of epochs', str(args.num_epochs))
-    writer.add_text('Alpha', str(args.alpha))
-    writer.add_text('Beta', str(args.beta))
-    writer.add_text('Batch size', str(args.batch_size))
-
     if args.save_path[-1] != '/':
         args.save_path += '/'
     full_model_save_path = args.save_path + args.save_model_name
