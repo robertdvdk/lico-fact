@@ -13,6 +13,7 @@ from utils.misc import *
 from pytorch_grad_cam import GradCAM, ScoreCAM, GradCAMPlusPlus
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from utils.data import ImagenetteDataset
+from models.resnet_prompt import *
 
 def get_saliency_maps(images, model, method='random', generator=None, targets=None, target_layers=None):
     if method == 'random':
@@ -140,18 +141,17 @@ def viz_insertion_deletion(probs, plot_type='Unspecified', filename='plot.png'):
     plt.savefig(filename)
 
 
-def run_evaluation(testloader, device, model, generator, saliency_method, blur, pixel_batch_size):
+def run_evaluation(testloader, device, net, generator, saliency_method, blur, pixel_batch_size, target_layers):
     num_batches = 0
     running_avg_auc_insertion = 0
     running_avg_auc_deletion = 0
 
     for batch in testloader:
+        print(f'{num_batches} / {len(testloader)}')
         x, y = batch
         x, y = x.to(device), y.to(device)
 
-        target_layers = [model.block3.layer[0].conv2]
-
-        saliency_maps = get_saliency_maps(x, model, method=saliency_method, generator=generator, targets=y,
+        saliency_maps = get_saliency_maps(x, net, method=saliency_method, generator=generator, targets=y,
                                           target_layers=target_layers)
 
         B, H, W = saliency_maps.shape
@@ -162,9 +162,10 @@ def run_evaluation(testloader, device, model, generator, saliency_method, blur, 
         _, indices = torch.topk(flat_saliency_maps, num_pixels, dim=1)
         indices = torch.stack((indices // W, indices % W), dim=-1)
 
+
         # get insertion and deletion probs
-        insertion_probs = insertion(x, indices, y, model, pixel_batch_size, blur)
-        deletion_probs = deletion(x, indices, y, model, pixel_batch_size)
+        insertion_probs = insertion(x, indices, y, net, pixel_batch_size, blur)
+        deletion_probs = deletion(x, indices, y, net, pixel_batch_size)
 
         # get the auc of insertion probs
         dx = 1 / insertion_probs.shape[1]
@@ -204,8 +205,14 @@ def main():
     parser.add_argument('--data_root', type=str, default='../../data/', help='Path to data')
     parser.add_argument('--image_feature_dim', default=64, type=int,
                         help="Dimension of feature maps")
-
+    parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for dataloader')
+    parser.add_argument('--seed', default=42, type=int,
+                        help="Random seed")
     args = parser.parse_args()
+
+    set_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -214,7 +221,8 @@ def main():
         'cifar10': ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         'cifar100': ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
         'imagenette_160': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        'imagenette_320': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        'imagenette_320': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        'imagenet': ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     }
 
     assert args.test_dataset in dataset_statistics.keys(), print('Invalid dataset name')
@@ -227,7 +235,7 @@ def main():
         ])
         testset = torchvision.datasets.CIFAR10(root=args.data_root, train=False, download=True,
                                                transform=test_transform)
-        classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+        classnames = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     elif args.test_dataset == 'cifar100':
         test_transform = transforms.Compose([
@@ -237,7 +245,7 @@ def main():
         ])
         testset = torchvision.datasets.CIFAR100(root=args.data_root, train=False, download=True,
                                                 transform=test_transform)
-        classes = sorted(['beaver', 'dolphin', 'otter', 'seal', 'whale',
+        classnames = sorted(['beaver', 'dolphin', 'otter', 'seal', 'whale',
                           'aquarium fish', 'flatfish', 'ray', 'shark', 'trout',
                           'orchids', 'poppies', 'roses', 'sunflowers', 'tulips',
                           'bottles', 'bowls', 'cans', 'cups', 'plates',
@@ -271,32 +279,55 @@ def main():
         testset = ImagenetteDataset(args.data_root + args.test_dataset, 160,
                                     download=True, validation=True, transform=test_transform)
 
-        classes = ("tench", "English springer", "cassette player", "chain saw",
+        classnames = ("tench", "English springer", "cassette player", "chain saw",
                       "church", "French horn", "garbage truck", "gas pump", "golf ball", "parachute")
 
-    testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    elif args.test_dataset == 'imagenet':
+        test_transform = transforms.Compose([
+            transforms.Resize(224),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406),
+                                 (0.229, 0.224, 0.225)),
+        ])
 
-    wrn_builder = build_WideResNet(args.depth, args.width, 0.5, image_feature_dim=args.image_feature_dim)
-    wrn = wrn_builder.build(classes)
-    model = wrn.to(device)
+        train_split = torchvision.datasets.ImageFolder(root="/scratch-nvme/ml-datasets/imagenet/ILSVRC/Data/CLS-LOC/train", transform=test_transform)
+        train_size = int(len(train_split) * 0.16)
+        val_size, test_size = int(len(train_split) * 0.02), int(len(train_split) * 0.001)
+        rest = len(train_split) - train_size - val_size - test_size
+        _, _, testset, _ = torch.utils.data.random_split(train_split, [train_size, val_size, test_size, rest])
+        classnames = tuple([line.strip() for line in open('./utils/imagenet_classnames.txt', 'r')])
+
+    if args.test_dataset in ('partimagenet', 'imagenet'):
+        net = ResNetPrompt(classnames, BasicBlock, [3, 4, 6, 3], mode='test')
+        net = net.to(device)
+        target_layers = [net.layer4[2].conv1]
+    else:
+        wrn_builder = build_WideResNet(args.depth, args.width, 0.5, fixed_temperature=args.fixed_temperature, image_feature_dim=args.image_feature_dim)
+        net = wrn_builder.build(classnames)
+        net = net.to(device)
+        net.forward = net.logits
+        target_layers = [net.block3.layer[0].conv2]
+
+    testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
     # replace forward method with get_logits to conform to grad_cam library
-    model.forward = model.logits
+
 
     # load the model
-    model.load_state_dict(torch.load(args.model_path, map_location=device))
-    model.eval()
+    net.load_state_dict(torch.load(args.model_path, map_location=device))
+    net.eval()
     print("Successfully loaded model")
 
     if args.saliency_method == 'RISE':
-        generator = RISE(model, input_size=(32, 32), initial_mask_size=(7, 7), n_masks=args.n_masks)
+        generator = RISE(net, input_size=(32, 32), initial_mask_size=(7, 7), n_masks=args.n_masks)
     else:
         generator = None
 
     blur = GaussianBlur(int(2 * args.sigma - 1), args.sigma)
 
-    avg_auc_insertion, avg_auc_deletion = run_evaluation(testloader, device, model, generator, args.saliency_method,
-                                                         blur, args.pixel_batch_size)
+    avg_auc_insertion, avg_auc_deletion = run_evaluation(testloader, device, net, generator, args.saliency_method,
+                                                         blur, args.pixel_batch_size, target_layers)
 
     print(f"Average AUC insertion for given model/dataset: {avg_auc_insertion}")
     print(f"Average AUC deletion for given model/dataset: {avg_auc_deletion}")

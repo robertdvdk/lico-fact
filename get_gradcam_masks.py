@@ -17,11 +17,13 @@ def get_maps(net, testloader, model_name):
     i = 0
     for img, label in testloader:
         plt.imshow((img.squeeze().permute(1, 2, 0) * torch.Tensor([0.229, 0.224, 0.225]) + torch.Tensor([0.485, 0.456, 0.406])))
-        plt.savefig(f'./results/{model_name}/input_unnormalized_{i}.png')
+        plt.axis('off')
+        plt.savefig(f'./results/{model_name}/input_unnormalized_{i}.png', bbox_inches='tight')
         saliency_map = get_saliency_maps(net, img, label, target_layers=[net.layer4[2].conv1])
         plt.imshow((img.squeeze().permute(1, 2, 0) * torch.Tensor([0.229, 0.224, 0.225]) + torch.Tensor([0.485, 0.456, 0.406])))
         plt.imshow(saliency_map.squeeze(), cmap='jet', alpha=0.5)
-        plt.savefig(f'./results/{model_name}/saliency_map_{i}.png')
+        plt.axis('off')
+        plt.savefig(f'./results/{model_name}/saliency_map_{i}.png', bbox_inches='tight')
         i += 1
         if i >= 30:
             return
