@@ -13,15 +13,19 @@ from torch.utils.tensorboard import SummaryWriter
 import json
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+import matplotlib.pyplot as plt
 
-def evaluate(net, testloader, maskloader, device):
-    print("Accuracy:", get_accuracy(net, testloader, device))
-    ious = []
-    for img, label, mask in maskloader:
-        saliency_map = get_saliency_maps(net, img, label, target_layers=[net.layer4[1].conv2])
-        iou = torch.sum(saliency_map * mask) / torch.sum(saliency_map + mask - saliency_map * mask)
-        ious.append(iou)
-    print(np.mean(ious))
+def get_maps(net, testloader, device):
+    i = 0
+    for img, label in testloader:
+        plt.imshow((img.squeeze().permute(1, 2, 0) * torch.Tensor([0.229, 0.224, 0.225]) + torch.Tensor([0.485, 0.456, 0.406])))
+        plt.savefig(f'input_unnorm_{i}.png')
+        saliency_map = get_saliency_maps(net, img, label, target_layers=[net.layer4[2].conv1])
+        plt.imshow(saliency_map.squeeze(), cmap='jet')
+        plt.savefig(f'saliency_map_{i}.png')
+        i += 1
+        if i >= 30:
+            return
 
 def get_saliency_maps(net, images, targets=None, target_layers=None):
     cam = GradCAM(model=net, target_layers=target_layers)
@@ -86,48 +90,22 @@ def main():
         transforms.Normalize((0.485, 0.456, 0.406),
                              (0.229, 0.224, 0.225)),
     ])
-    testset = PartImageNetClassificationDataset('../../data/partimagenet/',
-                                                transform=test_transform,
-                                                split='test',
-                                                return_masks=False)
-    maskset = PartImageNetClassificationDataset('../../data/partimagenet/',
-                                                transform=test_transform,
-                                                split='test',
-                                                return_masks=True)
+    train_split = torchvision.datasets.ImageFolder(root="/scratch-nvme/ml-datasets/imagenet/ILSVRC/Data/CLS-LOC/train",
+                                                   transform=test_transform)
+    train_size = int(len(train_split) * 0.16)
+    val_size, test_size = int(len(train_split) * 0.02), int(len(train_split) * 0.02)
+    rest = len(train_split) - train_size - val_size - test_size
+    _, _, testset, _ = torch.utils.data.random_split(train_split, [train_size, val_size, test_size, rest])
+    classnames = tuple([line.strip() for line in open('./utils/imagenet_classnames.txt', 'r')])
 
-    classnames = ['cairn', 'patas', 'anemone fish', 'barracouta', 'tractor', 'howler monkey', 'beach wagon', 'otter',
-                  'Gila monster', 'jacamar', 'box turtle', 'hognose snake', 'Brittany spaniel', 'alligator lizard',
-                  'bighorn', 'schooner', 'squirrel monkey', 'kite', 'cheetah', 'yawl', 'puffer', 'vine snake', 'coucal',
-                  'marmoset', 'bicycle-built-for-two', 'ibex', 'badger', 'diamondback', 'American black bear',
-                  'Arabian camel', 'frilled lizard', 'Weimaraner', 'moped', 'weasel', 'orangutan', 'trimaran',
-                  'limousine', 'macaque', 'mink', 'bee eater', 'unicycle', 'gorilla', 'proboscis monkey', 'snowplow',
-                  'tree frog', 'loggerhead', 'boa constrictor', 'Irish water spaniel', 'capuchin', 'garter snake',
-                  'golfcart', 'recreational vehicle', 'African crocodile', 'gibbon', 'convertible', 'mud turtle',
-                  'Walker hound', 'terrapin', 'green lizard', 'night snake', 'colobus', 'ringneck snake', 'brown bear',
-                  'goldfish', 'polecat', 'tricycle', 'common newt', 'Tibetan terrier', 'pirate', 'tench', 'minivan',
-                  'Boston bull', 'cougar', 'warplane', 'great white shark', 'golden retriever', 'warthog', 'airliner',
-                  'giant panda', 'green mamba', 'sloth bear', 'ice bear', 'sidewinder', 'little blue heron',
-                  'American egret', 'redbone', 'sports car', 'tailed frog', 'African chameleon', 'Indian cobra', 'titi',
-                  'English springer', 'siamang', 'Saint Bernard', 'jeep', 'horned viper', 'albatross', 'dowitcher',
-                  'spoonbill', 'bald eagle', 'chimpanzee', 'ruddy turnstone', 'coho', 'police van', 'timber wolf',
-                  'hartebeest', 'ambulance', 'water bottle', 'rock python', 'leopard', 'American alligator',
-                  'beer bottle', 'Komodo dragon', 'ox', 'racer', 'Saluki', 'whiptail', 'wine bottle', 'vizsla', 'tiger',
-                  'agama', 'baboon', 'European gallinule', 'chow', 'spotted salamander', 'king snake', 'mountain bike',
-                  'Japanese spaniel', 'cab', 'black stork', 'ram', 'garbage truck', 'hammerhead', 'green snake',
-                  'Arctic fox', 'tiger shark', 'guenon', 'go-kart', 'Egyptian cat', 'minibus', 'pill bottle', 'impala',
-                  'soft-coated wheaten terrier', 'fox squirrel', 'thunder snake', 'spider monkey', 'killer whale',
-                  'water buffalo', 'goose', 'Eskimo dog', 'leatherback turtle', 'Gordon setter', 'pop bottle',
-                  'bullfrog', 'gazelle', 'trolleybus', 'school bus', 'motor scooter']
-
-    net = ResNetPrompt(classnames, BasicBlock, [2, 2, 2, 2], mode='test')
-    net.load_state_dict(torch.load('./trained_models/pim_baseline_run1/pim_baseline_run1_199.pt'))
+    net = ResNetPrompt(classnames, BasicBlock, [3, 4, 6, 3], mode='test')
+    net.load_state_dict(torch.load('./trained_models/IMNET50/IMNET50.pt'))
     net = net.to(device)
 
     testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
                                              shuffle=False, num_workers=args.num_workers)
-    maskloader = torch.utils.data.DataLoader(maskset, batch_size=args.batch_size,
-                                             shuffle=False, num_workers=args.num_workers)
-    evaluate(net, testloader, maskloader, device)
+
+    get_maps(net, testloader, device)
 
 
 if __name__ == "__main__":

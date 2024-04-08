@@ -53,10 +53,9 @@ triceratops
 thunder snake
 ringneck snake
 hognose snake
-sand viper
 green snake
-grass snake
 king snake
+garter snake
 water snake
 vine snake
 night snake
@@ -65,6 +64,7 @@ rock python
 Indian cobra
 green mamba
 sea snake
+horned viper
 diamondback
 sidewinder
 trilobite
@@ -81,10 +81,10 @@ centipede
 black grouse
 ptarmigan
 ruffed grouse
-partridge
 prairie chicken
 peacock
 quail
+partridge
 African grey
 macaw
 sulphur-crested cockatoo
@@ -122,7 +122,7 @@ fiddler crab
 king crab
 American lobster
 spiny lobster
-crawfish
+crayfish
 hermit crab
 isopod
 white stork
@@ -285,10 +285,10 @@ Persian cat
 Siamese cat
 Egyptian cat
 cougar
-catamount
-panther
+lynx
 leopard
 snow leopard
+jaguar
 lion
 tiger
 cheetah
@@ -340,7 +340,7 @@ guinea pig
 sorrel
 zebra
 hog
-Sus scrofa
+wild boar
 warthog
 hippopotamus
 ox
@@ -357,9 +357,9 @@ llama
 weasel
 mink
 polecat
-fitch
 black-footed ferret
 otter
+skunk
 badger
 armadillo
 three-toed sloth
@@ -386,7 +386,7 @@ indri
 Indian elephant
 African elephant
 lesser panda
-panda
+giant panda
 barracouta
 eel
 coho
@@ -434,9 +434,7 @@ bassoon
 bathing cap
 bath towel
 bathtub
-tub
 beach wagon
-wagon
 beacon
 beaker
 bearskin
@@ -495,7 +493,6 @@ chain saw
 chest
 chiffonier
 chime
-gong
 china cabinet
 Christmas stocking
 church
@@ -515,10 +512,10 @@ container ship
 convertible
 corkscrew
 cornet
-horn
 cowboy boot
 cowboy hat
 cradle
+crane
 crash helmet
 crate
 crib
@@ -567,6 +564,7 @@ fountain
 fountain pen
 four-poster
 freight car
+French horn
 frying pan
 fur coat
 garbage truck
@@ -577,6 +575,7 @@ go-kart
 golf ball
 golfcart
 gondola
+gong
 gown
 grand piano
 greenhouse
@@ -637,6 +636,7 @@ lumbermill
 magnetic compass
 mailbag
 mailbox
+maillot
 maillot
 manhole cover
 maraca
@@ -732,6 +732,7 @@ plow
 plunger
 Polaroid camera
 pole
+police van
 poncho
 pool table
 pop bottle
@@ -741,6 +742,7 @@ power drill
 prayer rug
 printer
 prison
+projectile
 projector
 puck
 punching bag
@@ -872,6 +874,7 @@ tripod
 triumphal arch
 trolleybus
 trombone
+tub
 turnstile
 typewriter keyboard
 umbrella

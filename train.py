@@ -85,6 +85,7 @@ def train(net, trainloader, valloader, optimizer, scheduler, alpha, beta, w_dist
         if val_loss < best_val_loss:
             best_model = net.state_dict()
             best_val_loss = val_loss
+            torch.save(best_model, f'{full_model_save_path}/{save_model_name}_{epoch}.pt')
 
     if not os.path.exists(os.path.dirname(full_model_save_path)):
         os.makedirs(os.path.dirname(full_model_save_path))
@@ -276,15 +277,19 @@ def main():
             transforms.Normalize(dataset_statistics[args.train_dataset][0],
                                  dataset_statistics[args.train_dataset][1]),
         ])
-        train_split = torchvision.datasets.ImageNet(root=args.data_root + 'imagenet/',
-                                                     split='train', transform=train_transform)
-        train_size = int(len(train_split) * 0.95)
-        trainset, valset = torch.utils.data.random_split(train_split, [train_size,
-                                                                       len(train_split) - train_size])
+        train_split = torchvision.datasets.ImageFolder(root="/scratch-nvme/ml-datasets/imagenet/ILSVRC/Data/CLS-LOC/train", transform=train_transform)
+        train_size = int(len(train_split) * 0.16)
+        val_size, test_size = int(len(train_split) * 0.02), int(len(train_split) * 0.02)
+        rest = len(train_split) - train_size - val_size - test_size
+        trainset, valset, testset, _ = torch.utils.data.random_split(train_split, [train_size, val_size, test_size, rest])
 
-        testset = torchvision.datasets.ImageNet(root=args.data_root + 'imagenet/',
-                                                    split='val', transform=val_transform)
-        classnames = tuple([line.strip() for line in open('./utils/imagenet_classes.txt', 'r')])
+        # train_set
+        # val_size = int(len(train_split) * 0.05)
+        # trainset, valset, testset = torch.utils.data.random_split(train_split, [len(train_split) - val_size*2, val_size, val_size])
+
+        valset.transforms = val_transform
+        testset.transforms = val_transform
+        classnames = tuple([line.strip() for line in open('./utils/imagenet_classnames.txt', 'r')])
     else:
         image_size = int(args.train_dataset.split("_")[-1])
         trainset_full = ImagenetteDataset(args.data_root + args.train_dataset, image_size,
@@ -306,7 +311,7 @@ def main():
 
 
     if args.train_dataset in ('partimagenet', 'imagenet'):
-        net = ResNetPrompt(classnames, BasicBlock, [2, 2, 2, 2])
+        net = ResNetPrompt(classnames, BasicBlock, [3, 4, 6, 3])
         net = net.to(device)
     else:
         wrn_builder = build_WideResNet(args.depth, args.width, 0.5, fixed_temperature=args.fixed_temperature, image_feature_dim=args.image_feature_dim)
